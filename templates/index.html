@@ -36,7 +36,7 @@
         var map = new L.map('map', {
             center: [30,0], 
             minZoom: 1,
-            zoom: 2,
+            zoom: 4,
             zoomSnap: 1,
             maxBounds: [[-84, -Infinity],[84, Infinity]],
             maxBoundsViscosity: 1.0
@@ -49,12 +49,12 @@
         // basemap
         var CartoDB_DarkMatterNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            maxZoom: 6
+            maxZoom: 3
         }).addTo(map);
 
         var mapdata = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
             attribution: 'Map Data',
-            maxZoom: 6,
+            maxZoom: 7,
             opacity: 0.75
         }).addTo(map);
 

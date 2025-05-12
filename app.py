@@ -46,7 +46,7 @@ def tile2mercator(xtile, ytile, zoom):
 
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
-def generateatile(zoom, x, y):
+def generateatile(zoom, longitude, latitude):
     # The function takes the zoom and tile path from the web request,
     # and determines the top left and bottom right coordinates of the tile.
     # This information is used to query against the dataframe.
@@ -54,15 +54,15 @@ def generateatile(zoom, x, y):
     xright, yright = tile2mercator(int(x)+1, int(y)+1, int(zoom))
 
     # ensuring no gaps are left between tiles due to partitioning occurring between coordinates.
-    xleft_snapped = lon_array.sel(x=xleft, method="nearest").values
-    yleft_snapped = lat_array.sel(y=yleft, method="nearest").values
-    xright_snapped = lon_array.sel(x=xright, method="nearest").values
-    yright_snapped = lat_array.sel(y=yright, method="nearest").values
+    xleft_snapped = lon_array.sel(longitude=xleft, method="nearest").values
+    yleft_snapped = lat_array.sel(latitude=yleft, method="nearest").values
+    xright_snapped = lon_array.sel(longtitude=xright, method="nearest").values
+    yright_snapped = lat_array.sel(latitude=yright, method="nearest").values
 
     # The dataframe query gets passed to Datashader to construct the graphic.
     xcondition = "x >= {xleft_snapped} and x <= {xright_snapped}".format(xleft_snapped=xleft_snapped, xright_snapped=xright_snapped)
     ycondition = "y <= {yleft_snapped} and y >= {yright_snapped}".format(yleft_snapped=yleft_snapped, yright_snapped=yright_snapped)
-    frame = data.query(x=xcondition, y=ycondition)
+    frame = data.query(longitude=xcondition, latitude=ycondition)
 
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
     csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(min(xleft-10, xright), max(
@@ -82,8 +82,8 @@ def index():
     return render_template('index.html')
 
 @app.route("/tiles/<int:zoom>/<int:x>/<int:y>.png")
-def tile(x, y, zoom):
-    results = generateatile(zoom, x, y)
+def tile(longitude, latitude, zoom):
+    results = generateatile(zoom, longitude, latitude)
     # image passed off to bytestream
     results_bytes = io.BytesIO()
     results.save(results_bytes, 'PNG')
