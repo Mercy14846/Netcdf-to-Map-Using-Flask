@@ -22,8 +22,8 @@ min_val = float(data['tmin'].min())
 max_val = float(data['tmax'].max())
 
 # extract dimensions
-lon_array = data['x']
-lat_array = data['y']
+lon_array = data['longitude']
+lat_array = data['latitude']
 data_array = data['tmin']
 time_data_array = time_data['time']
 
@@ -97,7 +97,7 @@ def get_time_series():
     longitude = request_data['longitude']
 
     df_slice = time_data_array.sel(x=longitude, y=latitude, method="nearest")
-    df_slice = df_slice.to_dataframe().reset_index()[['year', 'TS']]
+    df_slice = df_slice.to_dataframe().reset_index()[['year', 'tmin']]
 
     # convert the DataFrame to JSON
     json_data = df_slice.to_json(orient='records')
