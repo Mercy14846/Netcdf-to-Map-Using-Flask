@@ -18,14 +18,14 @@ data = xr.open_dataset("static/data/temp_2m.nc")
 time_data = xr.open_dataset("static/data/temperature.nc")
 
 # find min/max data values to set global colorbar
-min_val = float(data['TS'].min())
-max_val = float(data['TS'].max())
+min_val = float(data['tmin'].min())
+max_val = float(data['tmax'].max())
 
 # extract dimensions
 lon_array = data['x']
 lat_array = data['y']
-data_array = data['TS']
-time_data_array = time_data['TS']
+data_array = data['tmin']
+time_data_array = time_data['time']
 
 
 # https://github.com/ScottSyms/tileshade/
@@ -67,7 +67,7 @@ def generateatile(zoom, x, y):
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
     csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(min(xleft-10, xright), max(
         xleft, xright)), y_range=(min(yleft, yright), max(yleft, yright)))
-    agg = csv.quadmesh(frame, x='x', y='y', agg=ds.mean('TS'))
+    agg = csv.quadmesh(frame, x='x', y='y', agg=ds.mean('tmin'))
 
     # The image is created from the aggregate object, a color map and aggregation function.
     img = tf.shade(agg, cmap=colorcet.coolwarm, span=[min_val, max_val], how="linear")
