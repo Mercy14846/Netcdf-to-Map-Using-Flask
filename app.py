@@ -27,7 +27,7 @@ lat_array = data['y']
 data_array = data['TS']
 time_data_array = time_data['TS']
 
-# following function from ScottSyms tileshade repo under the GNU General Public License v3.0.
+
 # https://github.com/ScottSyms/tileshade/
 def tile2mercator(xtile, ytile, zoom):
     # takes the zoom and tile path and passes back the EPSG:3857
@@ -43,7 +43,7 @@ def tile2mercator(xtile, ytile, zoom):
     mercator = lnglat_to_meters(lon_deg, lat_deg)
     return mercator
 
-# following function adapted from ScottSyms tileshade repo under the GNU General Public License v3.0.
+
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
 def generateatile(zoom, x, y):
