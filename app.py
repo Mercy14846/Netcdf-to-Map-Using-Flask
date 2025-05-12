@@ -29,13 +29,13 @@ time_data_array = time_data['time']
 
 
 # https://github.com/ScottSyms/tileshade/
-def tile2mercator(xtile, ytile, zoom):
+def tile2mercator(longitudetile, latitudetile, zoom):
     # takes the zoom and tile path and passes back the EPSG:3857
     # coordinates of the top left of the tile.
     # From Openstreetmap
     n = 2.0 ** zoom
-    lon_deg = xtile / n * 360.0 - 180.0
-    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+    lon_deg = longitudetile / n * 360.0 - 180.0
+    lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * latitudetile / n)))
     lat_deg = math.degrees(lat_rad)
 
     # Convert the results of the degree calulation above and convert
@@ -50,24 +50,24 @@ def generateatile(zoom, longitude, latitude):
     # The function takes the zoom and tile path from the web request,
     # and determines the top left and bottom right coordinates of the tile.
     # This information is used to query against the dataframe.
-    xleft, yleft = tile2mercator(int(x), int(y), int(zoom))
-    xright, yright = tile2mercator(int(x)+1, int(y)+1, int(zoom))
+    xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
+    xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
 
     # ensuring no gaps are left between tiles due to partitioning occurring between coordinates.
     xleft_snapped = lon_array.sel(longitude=xleft, method="nearest").values
     yleft_snapped = lat_array.sel(latitude=yleft, method="nearest").values
-    xright_snapped = lon_array.sel(longtitude=xright, method="nearest").values
+    xright_snapped = lon_array.sel(longitude=xright, method="nearest").values
     yright_snapped = lat_array.sel(latitude=yright, method="nearest").values
 
     # The dataframe query gets passed to Datashader to construct the graphic.
-    xcondition = "x >= {xleft_snapped} and x <= {xright_snapped}".format(xleft_snapped=xleft_snapped, xright_snapped=xright_snapped)
-    ycondition = "y <= {yleft_snapped} and y >= {yright_snapped}".format(yleft_snapped=yleft_snapped, yright_snapped=yright_snapped)
+    xcondition = "longitude >= {xleft_snapped} and longitude <= {xright_snapped}".format(xleft_snapped=xleft_snapped, xright_snapped=xright_snapped)
+    ycondition = "latitude <= {yleft_snapped} and latitude >= {yright_snapped}".format(yleft_snapped=yleft_snapped, yright_snapped=yright_snapped)
     frame = data.query(longitude=xcondition, latitude=ycondition)
 
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
     csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(min(xleft-10, xright), max(
         xleft, xright)), y_range=(min(yleft, yright), max(yleft, yright)))
-    agg = csv.quadmesh(frame, x='x', y='y', agg=ds.mean('tmin'))
+    agg = csv.quadmesh(frame, x='longitude', y='latitude', agg=ds.mean('tmin'))
 
     # The image is created from the aggregate object, a color map and aggregation function.
     img = tf.shade(agg, cmap=colorcet.coolwarm, span=[min_val, max_val], how="linear")
@@ -81,7 +81,7 @@ app = Flask(__name__)
 def index():
     return render_template('index.html')
 
-@app.route("/tiles/<int:zoom>/<int:x>/<int:y>.png")
+@app.route("/tiles/<int:zoom>/<int:longitude>/<int:latitude>.png")
 def tile(longitude, latitude, zoom):
     results = generateatile(zoom, longitude, latitude)
     # image passed off to bytestream
@@ -96,7 +96,7 @@ def get_time_series():
     latitude = request_data['latitude']
     longitude = request_data['longitude']
 
-    df_slice = time_data_array.sel(x=longitude, y=latitude, method="nearest")
+    df_slice = time_data_array.sel(longitude=longitude, latitude=latitude, method="nearest")
     df_slice = df_slice.to_dataframe().reset_index()[['year', 'tmin']]
 
     # convert the DataFrame to JSON

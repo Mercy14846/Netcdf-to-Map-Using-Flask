@@ -34,7 +34,7 @@
         // var socket = io();  // Create a WebSocket connection to the server
 
         var map = new L.map('map', {
-            center: [30,0], 
+            center: [12.04,11.07], 
             minZoom: 1,
             zoom: 4,
             zoomSnap: 1,
@@ -293,7 +293,7 @@
 
             // construct scales for the x-axis and y-axis based on data range
             const xDomain = d3.extent(data, d => d.year);
-            const yDomain = d3.extent(data, d => d.TS)
+            const yDomain = d3.extent(data, d => d.tmin)
             const timeScale = d3.scaleLinear().domain(xDomain).range([0, chartWidth]);
             const dataScale = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
 
