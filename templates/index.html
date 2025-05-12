@@ -25,7 +25,7 @@
             Coordinates: (<span id="lat-update">N/A</span>, <span id="lon-update">N/A</span>)
         </p>
         <p>
-            CESM2 Predicted 2023 Mean Surface Temperature: <span id="temp-update">N/A</span>
+            Temperature: <span id="temp-update">N/A</span>
         </p>
         <svg id="time-series-chart" height="350" width="350"></svg>
     </div>
@@ -288,7 +288,7 @@
             // ensure data is of type Number
             data.forEach( d => {
                 d['year'] = Number( d['year']);
-                d['TS'] = Number(d['TS']);
+                d['tmin'] = Number(d['tmin']);
             });
 
             // construct scales for the x-axis and y-axis based on data range
