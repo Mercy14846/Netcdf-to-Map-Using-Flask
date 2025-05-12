@@ -14,8 +14,8 @@ from datashader import transfer_functions as tf
 from datashader.utils import lnglat_to_meters
 
 # import dataset
-data = xr.open_dataset("static/data/TS2023_reproject.nc")
-time_data = xr.open_dataset("static/data/TS_annual_reproject.nc")
+data = xr.open_dataset("static/data/temp_2m.nc")
+time_data = xr.open_dataset("static/data/temperature.nc")
 
 # find min/max data values to set global colorbar
 min_val = float(data['TS'].min())
