@@ -59,6 +59,22 @@ def generateatile(zoom, longitude, latitude):
     xright_snapped = lon_array.sel(longitude=xright, method="nearest").values
     yright_snapped = lat_array.sel(latitude=yright, method="nearest").values
 
+     # Ensure xleft_snapped < xright_snapped
+    if xleft_snapped >= xright_snapped:
+        idx = lon_array.get_index('longitude').get_loc(xleft_snapped)
+        if idx < len(lon_array) - 1:
+            xright_snapped = lon_array[idx + 1].values
+        else:
+            xright_snapped = lon_array[idx].values
+
+    # Ensure yleft_snapped > yright_snapped
+    if yleft_snapped <= yright_snapped:
+        idx = lat_array.get_index('latitude').get_loc(yleft_snapped)
+        if idx > 0:
+            yright_snapped = lat_array[idx - 1].values
+        else:
+            yright_snapped = lat_array[idx].values
+
     # The dataframe query gets passed to Datashader to construct the graphic.
     xcondition = "longitude >= {xleft_snapped} and longitude <= {xright_snapped}".format(xleft_snapped=xleft_snapped, xright_snapped=xright_snapped)
     ycondition = "latitude <= {yleft_snapped} and latitude >= {yright_snapped}".format(yleft_snapped=yleft_snapped, yright_snapped=yright_snapped)
