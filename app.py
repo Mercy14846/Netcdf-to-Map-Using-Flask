@@ -120,15 +120,5 @@ def get_time_series():
     # send the JSON response
     return jsonify(data=json_data)
 
-# @socketio.on('mousemove')
-# def handle_mousemove(coords):
-#     # process the coordinates received from the client
-#     value = data_array.sel(x=coords['lng'], y=coords['lat'], method="nearest")
-#     socketio.emit('updated_coordinates', float(value.values))  # Emit the queried value back to the client
-
-# if __name__ == '__main__':
-#     socketio.run(app)
-
-
 if __name__ == '__main__':
    app.run(debug=True)
