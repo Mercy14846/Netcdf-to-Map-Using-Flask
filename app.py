@@ -76,8 +76,8 @@ def generateatile(zoom, longitude, latitude):
             yright_snapped = lat_array[idx].values
 
     # The dataframe query gets passed to Datashader to construct the graphic.
-    xcondition = "longitude >= {xleft_snapped} and longitude <= {xright_snapped}".format(xleft_snapped=xleft_snapped, xright_snapped=xright_snapped)
-    ycondition = "latitude <= {yleft_snapped} and latitude >= {yright_snapped}".format(yleft_snapped=yleft_snapped, yright_snapped=yright_snapped)
+    xcondition = "longitude >= {xleft} and longitude <= {xright}".format(xleft=xleft_snapped, xright=xright_snapped)
+    ycondition = "latitude <= {yleft} and latitude >= {yright}".format(yleft=yleft_snapped, yright=yright_snapped)
     frame = data.query(longitude=xcondition, latitude=ycondition)
 
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
