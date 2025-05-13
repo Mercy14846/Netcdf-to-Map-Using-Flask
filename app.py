@@ -81,8 +81,7 @@ def generateatile(zoom, longitude, latitude):
     frame = data.query(longitude=xcondition, latitude=ycondition)
 
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
-    csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(min(xleft-10, xright), max(
-        xleft, xright)), y_range=(min(yleft, yright), max(yleft, yright)))
+    csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(xleft, xright), y_range=(yright, yleft))
     agg = csv.quadmesh(frame, x='longitude', y='latitude', agg=ds.mean('tmin'))
 
     # The image is created from the aggregate object, a color map and aggregation function.
