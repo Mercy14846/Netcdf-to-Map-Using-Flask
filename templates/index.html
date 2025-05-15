@@ -385,8 +385,17 @@
             // elevate plotted line above gridlines
             chartArea.raise()
 
-            let selectedYearData = data.find(d => d.year === currentYear).temperature
-            console.log(selectedYearData)
+            // Add point for current year if it exists
+            let selectedYearData = data.find(d => d.year === currentYear)?.temperature;
+            if (selectedYearData !== undefined) {
+                chartArea.append("circle")
+                    .attr("cx", timeScale(currentYear))
+                    .attr("cy", dataScale(selectedYearData))
+                    .attr("r", "6px")
+                    .style("fill", "gray")
+                    .style("stroke", "white")
+                    .style("stroke-width", 2);
+            }
 
             chartArea.append("circle")
                      .attr("cx", timeScale(currentYear))
