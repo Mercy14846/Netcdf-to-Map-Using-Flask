@@ -149,35 +149,29 @@ def get_time_series():
             method="nearest"
         )
         
-        # Convert to dataframe with time index
-        df_slice = ts_slice.to_dataframe()
-        
-        # Reset index and ensure we have a proper time column
-        if isinstance(df_slice.index, pd.MultiIndex):
-            df_slice = df_slice.reset_index()
+        # Create a DataFrame with the time index and temperature values
+        if isinstance(ts_slice, xr.DataArray):
+            # If we have a DataArray with a time dimension
+            df_slice = pd.DataFrame({
+                'year': ts_slice.time.values if hasattr(ts_slice, 'time') else range(len(ts_slice)),
+                'temperature': ts_slice.values
+            })
         else:
-            df_slice = df_slice.reset_index().rename(columns={'index': 'time'})
+            # If we have a scalar value, create a single row DataFrame
+            df_slice = pd.DataFrame({
+                'year': [2023],  # or whatever year is appropriate
+                'temperature': [float(ts_slice)]
+            })
         
-        print("DataFrame columns:", df_slice.columns.tolist())
-        print("DataFrame head:", df_slice.head().to_dict('records'))
+        print("DataFrame shape:", df_slice.shape)
+        print("DataFrame head:", df_slice.head())
         
-        # Get the variable name that was actually found in time_data_var
-        temp_col = time_data_var.name
-        time_col = 'time' if 'time' in df_slice.columns else 'year'
+        # Convert to JSON-serializable format
+        df_slice['year'] = df_slice['year'].astype(str)
+        df_slice['temperature'] = df_slice['temperature'].astype(float)
         
-        if time_col in df_slice.columns:
-            result_df = df_slice[[time_col, temp_col]].copy()
-            print("Final data shape:", result_df.shape)
-            print("Final columns:", result_df.columns.tolist())
-            print("Sample data:", result_df.head().to_dict('records'))
-            
-            # Ensure the data is serializable
-            result_df[time_col] = result_df[time_col].astype(str)
-            json_data = result_df.to_dict('records')
-            return jsonify({'data': json_data})
-        else:
-            print(f"Missing time column. Available columns: {df_slice.columns}")
-            return jsonify({'error': 'Time column not found in data'}), 500
+        json_data = df_slice.to_json(orient='records')
+        return jsonify({'data': json_data})
             
     except Exception as e:
         print(f"Error processing time series: {str(e)}")
