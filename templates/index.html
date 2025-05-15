@@ -265,21 +265,35 @@
             let longitude = clickedCoords.lng;
 
             // send coordinates to backend
-                fetch('/time-series', {
-                    method: 'POST',
-                    body: JSON.stringify({ latitude, longitude }),
-                    headers: {
+            fetch('/time-series', {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    latitude: clickedCoords.lat,
+                    longitude: clickedCoords.lng 
+                }),
+                headers: {
                     'Content-Type': 'application/json'
                     }
                 })
                 .then(response => response.json())
                 .then(data => {
                     // call a function to process the received dataframe with d3.js and plot it
-                    data = JSON.parse(data.data)
-                    plotData(data, clickedCoords);
+                    if (data.error) {
+                        console.error('Server error:', data.error);
+                        return;
+                    }
+                    try {
+                        // Parse the JSON string containing the records
+                        const timeSeriesData = JSON.parse(data.data);
+                        console.log('Parsed time series data:', timeSeriesData);
+                        plotData(timeSeriesData, clickedCoords);
+                    } catch (error) {
+                        console.error('Error parsing time series data:', error);
+                        console.log('Raw data received:', data);
+                    }
                 })
                 .catch(error => {
-                    console.error('Error:', error);
+                    console.error('Network error:', error);
                 });
         });
 
@@ -292,7 +306,7 @@
 
             // construct scales for the x-axis and y-axis based on data range
             const xDomain = d3.extent(data, d => d.year);
-            const yDomain = d3.extent(data, d => d.tmin)
+            const yDomain = d3.extent(data, d => d.temperature);
             const timeScale = d3.scaleLinear().domain(xDomain).range([0, chartWidth]);
             const dataScale = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
 
@@ -363,9 +377,10 @@
                 .attr("stroke", "white")
                 .attr("stroke-width", 2)
                 .attr("d", d3.line()
-                    .x(function(d) { return (timeScale(d.year)) })
-                    .y(function(d) { return (dataScale(d.temperature)) })
-                )
+                    .x(d => timeScale(d.year))
+                    .y(d => dataScale(d.temperature))
+                );
+        }
             
             // elevate plotted line above gridlines
             chartArea.raise()
