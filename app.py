@@ -17,6 +17,9 @@ from datashader.utils import lnglat_to_meters
 data = xr.open_dataset("static/data/temp_2m.nc")
 time_data = xr.open_dataset("static/data/temperature.nc")
 
+# Print dataset info for debugging
+print("Time data structure:", time_data)
+
 # find min/max data values to set global colorbar
 min_val = float(data['tmin'].min())
 max_val = float(data['tmax'].max())
@@ -25,8 +28,16 @@ max_val = float(data['tmax'].max())
 lon_array = data['longitude']
 lat_array = data['latitude']
 data_array = data['tmin']
-time_data_array = time_data['time']
 
+# Extract time series data array - assuming 'tmin' or 'temperature' is the variable name
+time_data_var = None
+for var in time_data.data_vars:
+    if var in ['tmin', 'temperature']:
+        time_data_var = time_data[var]
+        break
+if time_data_var is None:
+    print("Available variables in time_data:", list(time_data.data_vars))
+    raise ValueError("Could not find temperature variable in time series data")
 
 # https://github.com/ScottSyms/tileshade/
 def tile2mercator(longitudetile, latitudetile, zoom):
@@ -53,32 +64,44 @@ def generateatile(zoom, longitude, latitude):
     xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
     xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
 
-    # ensuring no gaps are left between tiles due to partitioning occurring between coordinates.
-    xleft_snapped = lon_array.sel(longitude=xleft, method="nearest").values
-    yleft_snapped = lat_array.sel(latitude=yleft, method="nearest").values
-    xright_snapped = lon_array.sel(longitude=xright, method="nearest").values
-    yright_snapped = lat_array.sel(latitude=yright, method="nearest").values
+    # Get all longitude and latitude values
+    lon_values = lon_array.values
+    lat_values = lat_array.values
 
-     # Ensure xleft_snapped < xright_snapped
-    if xleft_snapped >= xright_snapped:
-        idx = lon_array.get_index('longitude').get_loc(xleft_snapped)
-        if idx < len(lon_array) - 1:
-            xright_snapped = lon_array[idx + 1].values
-        else:
-            xright_snapped = lon_array[idx].values
+    # Find nearest coordinates
+    xleft_idx = abs(lon_values - xleft).argmin()
+    xright_idx = abs(lon_values - xright).argmin()
+    yleft_idx = abs(lat_values - yleft).argmin()
+    yright_idx = abs(lat_values - yright).argmin()
 
-    # Ensure yleft_snapped > yright_snapped
-    if yleft_snapped <= yright_snapped:
-        idx = lat_array.get_index('latitude').get_loc(yleft_snapped)
-        if idx > 0:
-            yright_snapped = lat_array[idx - 1].values
-        else:
-            yright_snapped = lat_array[idx].values
+    # Ensure we have at least 2 points in each dimension
+    if xleft_idx == xright_idx and xleft_idx < len(lon_values) - 1:
+        xright_idx = xleft_idx + 1
+    elif xleft_idx == xright_idx:
+        xleft_idx = xright_idx - 1
+
+    if yleft_idx == yright_idx and yleft_idx < len(lat_values) - 1:
+        yright_idx = yleft_idx + 1
+    elif yleft_idx == yright_idx:
+        yleft_idx = yright_idx - 1
+
+    # Get the actual coordinate values
+    xleft_snapped = lon_values[xleft_idx]
+    xright_snapped = lon_values[xright_idx]
+    yleft_snapped = lat_values[yleft_idx]
+    yright_snapped = lat_values[yright_idx]
+
+    # Ensure correct ordering
+    if xleft_snapped > xright_snapped:
+        xleft_snapped, xright_snapped = xright_snapped, xleft_snapped
+    if yleft_snapped < yright_snapped:
+        yleft_snapped, yright_snapped = yright_snapped, yleft_snapped
 
     # The dataframe query gets passed to Datashader to construct the graphic.
-    xcondition = "longitude >= {xleft} and longitude <= {xright}".format(xleft=xleft_snapped, xright=xright_snapped)
-    ycondition = "latitude <= {yleft} and latitude >= {yright}".format(yleft=yleft_snapped, yright=yright_snapped)
-    frame = data.query(longitude=xcondition, latitude=ycondition)
+    frame = data.sel(
+        longitude=slice(xleft_snapped, xright_snapped),
+        latitude=slice(yleft_snapped, yright_snapped)
+    )
 
     # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
     csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(xleft, xright), y_range=(yright, yleft))
@@ -107,18 +130,61 @@ def tile(longitude, latitude, zoom):
 
 @app.route('/time-series', methods=['POST'])
 def get_time_series():
-    request_data = request.get_json()
-    latitude = request_data['latitude']
-    longitude = request_data['longitude']
-
-    df_slice = time_data_array.sel(longitude=longitude, latitude=latitude, method="nearest")
-    df_slice = df_slice.to_dataframe().reset_index()[['year', 'tmin']]
-
-    # convert the DataFrame to JSON
-    json_data = df_slice.to_json(orient='records')
-    
-    # send the JSON response
-    return jsonify(data=json_data)
+    try:
+        request_data = request.get_json()
+        if not request_data:
+            print("No JSON data received in request")
+            return jsonify(error="No data received"), 400
+            
+        latitude = float(request_data.get('latitude'))
+        longitude = float(request_data.get('longitude'))
+        
+        print(f"Processing request for lat={latitude}, lon={longitude}")
+        print(f"Available variables in time_data: {list(time_data.data_vars)}")
+        
+        # Get the time series data using the correct coordinate names
+        ts_slice = time_data_var.sel(
+            longitude=longitude,
+            latitude=latitude,
+            method="nearest"
+        )
+        
+        # Convert to dataframe with time index
+        df_slice = ts_slice.to_dataframe()
+        
+        # Reset index and ensure we have a proper time column
+        if isinstance(df_slice.index, pd.MultiIndex):
+            df_slice = df_slice.reset_index()
+        else:
+            df_slice = df_slice.reset_index().rename(columns={'index': 'time'})
+        
+        print("DataFrame columns:", df_slice.columns.tolist())
+        print("DataFrame head:", df_slice.head().to_dict('records'))
+        
+        # Get the variable name that was actually found in time_data_var
+        temp_col = time_data_var.name
+        time_col = 'time' if 'time' in df_slice.columns else 'year'
+        
+        if time_col in df_slice.columns:
+            result_df = df_slice[[time_col, temp_col]].copy()
+            print("Final data shape:", result_df.shape)
+            print("Final columns:", result_df.columns.tolist())
+            print("Sample data:", result_df.head().to_dict('records'))
+            
+            # Ensure the data is serializable
+            result_df[time_col] = result_df[time_col].astype(str)
+            json_data = result_df.to_dict('records')
+            return jsonify({'data': json_data})
+        else:
+            print(f"Missing time column. Available columns: {df_slice.columns}")
+            return jsonify({'error': 'Time column not found in data'}), 500
+            
+    except Exception as e:
+        print(f"Error processing time series: {str(e)}")
+        print("Dataset structure:", time_data)
+        print("Available coordinates:", time_data.coords)
+        print("Available variables:", time_data.variables)
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
    app.run(debug=True)

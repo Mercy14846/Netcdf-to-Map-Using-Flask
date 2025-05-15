@@ -259,11 +259,10 @@
             chartArea.selectAll("*").remove();
             svg.selectAll(".label").remove();
 
-            let clickedCoords = e.latlng
-
-            let projectedCoords = L.CRS.EPSG3857.project(e.latlng)
-            let latitude = projectedCoords.y;
-            let longitude = projectedCoords.x;
+            let clickedCoords = e.latlng;
+            
+            let latitude = clickedCoords.lat;
+            let longitude = clickedCoords.lng;
 
             // send coordinates to backend
                 fetch('/time-series', {
@@ -288,7 +287,7 @@
             // ensure data is of type Number
             data.forEach( d => {
                 d['year'] = Number( d['year']);
-                d['tmin'] = Number(d['tmin']);
+                d.temperature = Number(d['temperature']);
             });
 
             // construct scales for the x-axis and y-axis based on data range
@@ -365,13 +364,13 @@
                 .attr("stroke-width", 2)
                 .attr("d", d3.line()
                     .x(function(d) { return (timeScale(d.year)) })
-                    .y(function(d) { return (dataScale(d.TS)) })
+                    .y(function(d) { return (dataScale(d.temperature)) })
                 )
             
             // elevate plotted line above gridlines
             chartArea.raise()
 
-            let selectedYearData = data.find(d => d.year === currentYear).TS
+            let selectedYearData = data.find(d => d.year === currentYear).temperature
             console.log(selectedYearData)
 
             chartArea.append("circle")
