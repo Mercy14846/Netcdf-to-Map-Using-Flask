@@ -190,5 +190,14 @@ def get_layers():
         }
     })
 
+@app.route('/api/time-range')
+def get_time_range():
+    time_coords = time_data.time.values
+    return jsonify({
+        'start': time_coords[0].astype(str),
+        'end': time_coords[-1].astype(str),
+        'steps': len(time_coords)
+    })
+
 if __name__ == '__main__':
    app.run(debug=True)
