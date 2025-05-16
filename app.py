@@ -137,9 +137,12 @@ def generateatile(zoom, longitude, latitude):
                       span=[min_val, max_val], 
                       how="linear")
         
+        # Convert datashader image to PIL Image
+        pil_img = Image.fromarray(np.array(img.data))
+        
         # Cache the result
-        cache.set(cache_key, img, timeout=3600)
-        return img.to_pil()
+        cache.set(cache_key, pil_img, timeout=3600)
+        return pil_img
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
         return create_empty_tile()
@@ -153,7 +156,11 @@ def tile(longitude, latitude, zoom):
     results = generateatile(zoom, longitude, latitude)
     # image passed off to bytestream
     results_bytes = io.BytesIO()
-    results.save(results_bytes, 'PNG')
+    if isinstance(results, Image.Image):
+        results.save(results_bytes, format='PNG')
+    else:
+        # If for some reason we don't have a PIL Image, create an empty one
+        create_empty_tile().save(results_bytes, format='PNG')
     results_bytes.seek(0)
     return send_file(results_bytes, mimetype='image/png')
 
