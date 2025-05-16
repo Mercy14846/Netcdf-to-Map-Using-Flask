@@ -16,10 +16,32 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // Add data layer
 let dataLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
-    attribution: 'Map Data',
-    maxZoom: 7,
-    opacity: 0.75
+    attribution: 'Temperature Data',
+    minZoom: 1,
+    maxZoom: 10,
+    opacity: 0.75,
+    tileSize: 256,
+    updateWhenIdle: false,
+    updateWhenZooming: true,
+    keepBuffer: 2
 }).addTo(map);
+
+// Add debug info for tile loading
+dataLayer.on('loading', function() {
+    console.log('Loading tiles...');
+});
+
+dataLayer.on('load', function() {
+    console.log('All tiles loaded');
+});
+
+dataLayer.on('tileloadstart', function(e) {
+    console.log('Loading tile:', e.url);
+});
+
+dataLayer.on('tileerror', function(e) {
+    console.error('Error loading tile:', e.url);
+});
 
 // Add click event handler for time series data
 map.on('click', function(e) {

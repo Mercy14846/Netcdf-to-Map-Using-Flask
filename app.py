@@ -84,6 +84,15 @@ def generateatile(zoom, longitude, latitude):
     xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
     xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
 
+    # Convert mercator coordinates back to lat/lon
+    xleft = xleft / 20037508.34 * 180
+    xright = xright / 20037508.34 * 180
+    yleft = math.degrees(2 * math.atan(math.exp(yleft / 20037508.34 * math.pi)) - math.pi/2)
+    yright = math.degrees(2 * math.atan(math.exp(yright / 20037508.34 * math.pi)) - math.pi/2)
+
+    print(f"Tile coordinates: zoom={zoom}, lon={longitude}, lat={latitude}")
+    print(f"Mercator bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
+
     # Get all longitude and latitude values
     lon_values = lon_array.values
     lat_values = lat_array.values
@@ -117,6 +126,8 @@ def generateatile(zoom, longitude, latitude):
     if yleft_snapped < yright_snapped:
         yleft_snapped, yright_snapped = yright_snapped, yleft_snapped
 
+    print(f"Data bounds: ({xleft_snapped}, {yleft_snapped}) to ({xright_snapped}, {yright_snapped})")
+
     # Add error handling
     try:
         frame = data.sel(
@@ -124,8 +135,11 @@ def generateatile(zoom, longitude, latitude):
             latitude=slice(yleft_snapped, yright_snapped)
         )
         
+        print(f"Frame shape: {frame.sizes}")
+        
         # Check if frame is empty using sizes
         if any(size == 0 for size in frame.sizes.values()):
+            print("Empty frame, returning empty tile")
             return create_empty_tile()
 
         csv = ds.Canvas(plot_width=256, plot_height=256, 
