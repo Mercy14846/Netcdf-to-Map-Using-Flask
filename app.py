@@ -227,5 +227,24 @@ def get_legend(layer_name):
             'colors': colorcet.coolwarm
         })
 
+# Add support for more weather parameters
+WEATHER_PARAMS = {
+    'temperature': {
+        'variable': 'tmin',
+        'colormap': colorcet.coolwarm,
+        'units': '°C'
+    },
+    'precipitation': {
+        'variable': 'precipitation',
+        'colormap': colorcet.rain,
+        'units': 'mm'
+    },
+    'wind': {
+        'variable': ['u10', 'v10'],
+        'colormap': colorcet.rainbow,
+        'units': 'm/s'
+    }
+}
+
 if __name__ == '__main__':
    app.run(debug=True)
