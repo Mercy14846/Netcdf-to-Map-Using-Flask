@@ -176,7 +176,6 @@ def get_time_series():
         longitude = float(request_data.get('longitude'))
         
         print(f"Processing request for lat={latitude}, lon={longitude}")
-        print(f"Available variables in time_data: {list(time_data.data_vars)}")
         
         # Get the time series data using the correct coordinate names
         ts_slice = time_data_var.sel(
@@ -186,24 +185,24 @@ def get_time_series():
         )
         
         # Create a DataFrame with the time index and temperature values
-        if isinstance(ts_slice, xr.DataArray):
+        if hasattr(ts_slice, 'time'):
             # If we have a DataArray with a time dimension
             df_slice = pd.DataFrame({
-                'year': ts_slice.time.values if hasattr(ts_slice, 'time') else range(len(ts_slice)),
+                'year': pd.to_datetime(ts_slice.time.values).year,
                 'temperature': ts_slice.values
             })
         else:
-            # If we have a scalar value, create a single row DataFrame
+            # If we have a scalar value, we need to get the time values from the original dataset
             df_slice = pd.DataFrame({
-                'year': [2023],  # or whatever year is appropriate
-                'temperature': [float(ts_slice)]
+                'year': pd.to_datetime(time_data.time.values).year,
+                'temperature': [float(ts_slice)] * len(time_data.time)
             })
         
         print("DataFrame shape:", df_slice.shape)
         print("DataFrame head:", df_slice.head())
         
         # Convert to JSON-serializable format
-        df_slice['year'] = df_slice['year'].astype(str)
+        df_slice['year'] = df_slice['year'].astype(int)
         df_slice['temperature'] = df_slice['temperature'].astype(float)
         
         json_data = df_slice.to_json(orient='records')

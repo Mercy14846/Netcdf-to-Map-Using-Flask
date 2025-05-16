@@ -47,16 +47,16 @@
         // map.setMinZoom(initialZoom);
 
         // basemap
-        var CartoDB_DarkMatterNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            maxZoom: 3
-        }).addTo(map);
+        // var CartoDB_DarkMatterNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+        //     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        //     maxZoom: 3
+        // }).addTo(map);
 
-        var mapdata = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
-            attribution: 'Map Data',
-            maxZoom: 7,
-            opacity: 0.75
-        }).addTo(map);
+        // var mapdata = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+        //     attribution: 'Map Data',
+        //     maxZoom: 7,
+        //     opacity: 0.75
+        // }).addTo(map);
 
         var outlines = {"type":"GeometryCollection", "geometries": [
             {"type":"LineString","coordinates":[[-163.7128956777287,-78.59566741324154],[-163.1058009511638,-78.22333871857859],[-161.24511349184644,-78.38017669058443],[-160.24620805564453,-78.69364592886694],[-159.48240454815448,-79.04633757925897],[-159.20818356019765,-79.4970077452764],[-161.12760128481472,-79.63420867301133],[-162.43984676821842,-79.28146534618699],[-163.027407803377,-78.92877369579496],[-163.06660437727038,-78.8699659158468],[-163.7128956777287,-78.59566741324154]]},
