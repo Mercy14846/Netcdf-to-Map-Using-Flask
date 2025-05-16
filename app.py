@@ -1,5 +1,6 @@
 # import libraries
 from flask import Flask, send_file, render_template, jsonify, request
+from flask_caching import Cache
 # from flask_socketio import SocketIO
 
 import io
@@ -12,6 +13,14 @@ import colorcet
 
 from datashader import transfer_functions as tf
 from datashader.utils import lnglat_to_meters
+
+app = Flask(__name__)
+
+# Configure Flask-Caching
+cache = Cache(app, config={
+    'CACHE_TYPE': 'simple',
+    'CACHE_DEFAULT_TIMEOUT': 3600
+})
 
 # import dataset
 data = xr.open_dataset("static/data/temp_2m.nc")
@@ -128,10 +137,6 @@ def generateatile(zoom, longitude, latitude):
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
         return create_empty_tile()
-
-app = Flask(__name__)
-
-# socketio = SocketIO(app)
 
 @app.route("/")
 def index():
