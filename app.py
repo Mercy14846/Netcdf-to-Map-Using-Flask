@@ -184,19 +184,23 @@ def get_time_series():
             method="nearest"
         )
         
+        # Get time values from the dataset
+        time_values = pd.to_datetime(time_data.time.values)
+        years = time_values.year
+        
         # Create a DataFrame with the time index and temperature values
         if hasattr(ts_slice, 'time'):
             # If we have a DataArray with a time dimension
             df_slice = pd.DataFrame({
-                'year': pd.to_datetime(ts_slice.time.values).year,
+                'year': years,
                 'temperature': ts_slice.values
-            })
+            }, index=range(len(years)))
         else:
-            # If we have a scalar value, we need to get the time values from the original dataset
+            # If we have a scalar value, create a DataFrame with the time values
             df_slice = pd.DataFrame({
-                'year': pd.to_datetime(time_data.time.values).year,
-                'temperature': [float(ts_slice)] * len(time_data.time)
-            })
+                'year': years,
+                'temperature': [float(ts_slice)] * len(years)
+            }, index=range(len(years)))
         
         print("DataFrame shape:", df_slice.shape)
         print("DataFrame head:", df_slice.head())
