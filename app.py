@@ -5,7 +5,8 @@ from flask_caching import Cache
 
 import io
 import math
-
+import numpy as np
+from PIL import Image
 import datashader as ds
 import pandas as pd
 import xarray as xr
@@ -63,6 +64,10 @@ def tile2mercator(longitudetile, latitudetile, zoom):
     mercator = lnglat_to_meters(lon_deg, lat_deg)
     return mercator
 
+def create_empty_tile():
+    # Create a transparent 256x256 RGBA image
+    img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+    return img
 
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
@@ -119,8 +124,9 @@ def generateatile(zoom, longitude, latitude):
             latitude=slice(yleft_snapped, yright_snapped)
         )
         
-        if frame.size == 0:
-            return create_empty_tile() # type: ignore
+        # Check if frame is empty using sizes
+        if any(size == 0 for size in frame.sizes.values()):
+            return create_empty_tile()
 
         csv = ds.Canvas(plot_width=256, plot_height=256, 
                        x_range=(xleft, xright), 
@@ -136,7 +142,7 @@ def generateatile(zoom, longitude, latitude):
         return img.to_pil()
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
-        return create_empty_tile() # type: ignore
+        return create_empty_tile()
 
 @app.route("/")
 def index():
