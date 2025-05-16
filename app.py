@@ -224,8 +224,13 @@ def get_time_series():
         df_slice['year'] = df_slice['year'].astype(int)
         df_slice['temperature'] = df_slice['temperature'].astype(float)
         
-        json_data = df_slice.to_json(orient='records')
-        return jsonify({'data': json_data})
+        # Convert to list of dictionaries for JSON serialization
+        data_list = [
+            {'year': int(row['year']), 'temperature': float(row['temperature'])}
+            for _, row in df_slice.iterrows()
+        ]
+        
+        return jsonify({'data': data_list})
             
     except Exception as e:
         print(f"Error processing time series: {str(e)}")
