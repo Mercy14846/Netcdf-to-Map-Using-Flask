@@ -58,6 +58,12 @@ def tile2mercator(longitudetile, latitudetile, zoom):
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
 def generateatile(zoom, longitude, latitude):
+    # Add caching
+    cache_key = f"tile_{zoom}_{longitude}_{latitude}"
+    cached_tile = cache.get(cache_key)
+    if cached_tile:
+        return cached_tile
+
     # The function takes the zoom and tile path from the web request,
     # and determines the top left and bottom right coordinates of the tile.
     # This information is used to query against the dataframe.
@@ -97,19 +103,31 @@ def generateatile(zoom, longitude, latitude):
     if yleft_snapped < yright_snapped:
         yleft_snapped, yright_snapped = yright_snapped, yleft_snapped
 
-    # The dataframe query gets passed to Datashader to construct the graphic.
-    frame = data.sel(
-        longitude=slice(xleft_snapped, xright_snapped),
-        latitude=slice(yleft_snapped, yright_snapped)
-    )
+    # Add error handling
+    try:
+        frame = data.sel(
+            longitude=slice(xleft_snapped, xright_snapped),
+            latitude=slice(yleft_snapped, yright_snapped)
+        )
+        
+        if frame.size == 0:
+            return create_empty_tile()
 
-    # First the graphic is created, then the dataframe is passed to the Datashader aggregator.
-    csv = ds.Canvas(plot_width=256, plot_height=256, x_range=(xleft, xright), y_range=(yright, yleft))
-    agg = csv.quadmesh(frame, x='longitude', y='latitude', agg=ds.mean('tmin'))
-
-    # The image is created from the aggregate object, a color map and aggregation function.
-    img = tf.shade(agg, cmap=colorcet.coolwarm, span=[min_val, max_val], how="linear")
-    return img.to_pil()
+        csv = ds.Canvas(plot_width=256, plot_height=256, 
+                       x_range=(xleft, xright), 
+                       y_range=(yright, yleft))
+        agg = csv.quadmesh(frame, x='longitude', y='latitude', 
+                          agg=ds.mean('tmin'))
+        img = tf.shade(agg, cmap=colorcet.coolwarm, 
+                      span=[min_val, max_val], 
+                      how="linear")
+        
+        # Cache the result
+        cache.set(cache_key, img, timeout=3600)
+        return img.to_pil()
+    except Exception as e:
+        print(f"Error generating tile: {str(e)}")
+        return create_empty_tile()
 
 app = Flask(__name__)
 
