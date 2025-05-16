@@ -180,5 +180,15 @@ def get_time_series():
         print("Available variables:", time_data.variables)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/layers')
+def get_layers():
+    return jsonify({
+        'temperature': {
+            'min': min_val,
+            'max': max_val,
+            'units': '°C'
+        }
+    })
+
 if __name__ == '__main__':
    app.run(debug=True)
