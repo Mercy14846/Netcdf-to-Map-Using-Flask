@@ -241,7 +241,7 @@ WEATHER_PARAMS = {
     },
     'precipitation': {
         'variable': 'precipitation',
-        'colormap': colorcet.rain,
+        'colormap': colorcet.colorwheel,
         'units': 'mm'
     },
     'wind': {
