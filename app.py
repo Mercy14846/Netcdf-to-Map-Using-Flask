@@ -198,23 +198,35 @@ def get_time_series():
             method="nearest"
         )
         
+        print("Time series slice:", ts_slice)
+        print("Time series slice type:", type(ts_slice))
+        
         # Get time values from the dataset
         time_values = pd.to_datetime(time_data.time.values)
+        print("Time values:", time_values)
+        print("Time values type:", type(time_values))
+        print("Time values year type:", type(time_values.year))
         
         # Handle both array and scalar year values
         if isinstance(time_values.year, (int, np.integer)):
             years = [int(time_values.year)]
+            print("Single year value:", years[0])
         else:
             years = time_values.year.tolist()  # Convert to list to ensure it's iterable
+            print("Year values:", years[:5], "...")
         
         try:
             # If ts_slice is a DataArray with time dimension
             temp_values = ts_slice.values
             if not isinstance(temp_values, np.ndarray):
                 temp_values = np.array([temp_values])
-        except:
+            print("Temperature values shape:", temp_values.shape)
+            print("First few temperature values:", temp_values[:5])
+        except Exception as e:
+            print("Error processing temperature values:", str(e))
             # If ts_slice is a scalar value
             temp_values = np.full(len(years), float(ts_slice))
+            print("Created constant temperature array:", temp_values[:5])
         
         # Create DataFrame ensuring both arrays are the same length
         df_slice = pd.DataFrame({
@@ -222,8 +234,10 @@ def get_time_series():
             'temperature': temp_values[:len(years)]
         })
         
-        print("DataFrame shape:", df_slice.shape)
-        print("DataFrame head:", df_slice.head())
+        print("Final DataFrame info:")
+        print(df_slice.info())
+        print("First few rows:")
+        print(df_slice.head())
         
         # Convert to JSON-serializable format
         df_slice['year'] = df_slice['year'].astype(int)
