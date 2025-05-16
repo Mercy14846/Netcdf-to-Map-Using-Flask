@@ -21,12 +21,14 @@
         <div class="coordinates">
             <p>Latitude: <span id="lat-update">--</span></p>
             <p>Longitude: <span id="lon-update">--</span></p>
+            <p>Temperature: <span id="temp-update">--</span></p>
         </div>
         <svg id="time-series-chart" width="400" height="300"></svg>
     </div>
 
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
     <script>
+        // Initialize D3 chart elements
         const svg = d3.select("svg#time-series-chart");
         const width = +svg.attr("width");
         const height = +svg.attr("height");
@@ -37,11 +39,22 @@
         let currentYear = 2023;
         let timeSeriesData = [];
 
-        let annotations = svg.append("g").attr("id","annotations"); 
-        let chartArea = svg.append("g").attr("id","points")
-                        .attr("transform",`translate(${margin.left},${margin.top})`);
+        let annotations = svg.append("g")
+            .attr("id", "annotations")
+            .attr("transform", `translate(0,0)`);
+        let chartArea = svg.append("g")
+            .attr("id", "points")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        map.on('click', function (e) {
+        // Listen for map click events
+        map.on('mousemove', function(e) {
+            let currentLat = e.latlng.lat;
+            let currentLon = e.latlng.lng;
+            document.getElementById('lat-update').innerHTML = (Math.abs(currentLat).toFixed(2)) + "°" + (currentLat >= 0 ? 'N' : 'S');
+            document.getElementById('lon-update').innerHTML = (Math.abs(currentLon).toFixed(2)) + "°" + (currentLon >= 0 ? 'E' : 'W');
+        });
+
+        map.on('click', function(e) {
             annotations.selectAll("*").remove();
             chartArea.selectAll("*").remove();
             svg.selectAll(".label").remove();
@@ -73,6 +86,10 @@
                 try {
                     timeSeriesData = JSON.parse(data.data);
                     console.log('Parsed time series data:', timeSeriesData);
+                    if (timeSeriesData.length > 0) {
+                        const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
+                        document.getElementById('temp-update').textContent = latestTemp.toFixed(2) + '°C';
+                    }
                     plotData(timeSeriesData, clickedCoords);
                 } catch (error) {
                     console.error('Error parsing time series data:', error);
@@ -103,19 +120,19 @@
                 return;
             }
 
-            // ensure data is of type Number
+            // Ensure data is of type Number
             data.forEach(d => {
                 d.year = Number(d.year);
                 d.temperature = Number(d.temperature);
             });
 
-            // construct scales for the x-axis and y-axis based on data range
+            // Construct scales for the x-axis and y-axis based on data range
             const xDomain = d3.extent(data, d => d.year);
             const yDomain = d3.extent(data, d => d.temperature);
             const timeScale = d3.scaleLinear().domain(xDomain).range([0, chartWidth]);
             const dataScale = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
 
-            // construct y-axis
+            // Construct y-axis
             let leftAxis = d3.axisLeft(dataScale);
             let leftGridlines = d3.axisLeft(dataScale)
                                 .tickSize(-chartWidth-10)
@@ -123,28 +140,28 @@
 
             annotations.append("g")
                     .attr("class", "y axis")
-                    .attr("transform",`translate(${margin.left-10},${margin.top})`)
+                    .attr("transform", `translate(${margin.left-10},${margin.top})`)
                     .call(leftAxis);
             annotations.append("g")
                     .attr("class", "y gridlines")
-                    .attr("transform",`translate(${margin.left-10},${margin.top})`)
+                    .attr("transform", `translate(${margin.left-10},${margin.top})`)
                     .call(leftGridlines);
 
-            // construct x-axis
+            // Construct x-axis
             let bottomAxis = d3.axisBottom(timeScale).tickFormat(d3.format("d"));
             let bottomGridlines = d3.axisBottom(timeScale)
                                 .tickSize(-chartHeight-10)
                                 .tickFormat("");
             annotations.append("g")
                     .attr("class", "x axis")
-                    .attr("transform",`translate(${margin.left},${chartHeight + margin.top+10})`)
+                    .attr("transform", `translate(${margin.left},${chartHeight + margin.top+10})`)
                     .call(bottomAxis);
             annotations.append("g")
                     .attr("class", "x gridlines")
-                    .attr("transform",`translate(${margin.left},${chartHeight + margin.top+10})`)
+                    .attr("transform", `translate(${margin.left},${chartHeight + margin.top+10})`)
                     .call(bottomGridlines);
 
-            // create plot title
+            // Create plot title
             annotations.append('text')
                 .attr("x", chartWidth / 2.0 + margin.left)
                 .attr("y", 15)
@@ -154,7 +171,7 @@
                 .style("fill", "white")
                 .text("Time Series for " + clickedCoords.lat.toFixed(2) + "°, " + clickedCoords.lng.toFixed(2) + "°");
             
-            // create y-axis label
+            // Create y-axis label
             svg.append("text")
                .attr("class", "label")
                .attr("x", -chartHeight/2.0 - margin.top)
@@ -165,7 +182,7 @@
                .style("fill", "white")
                .text("Surface Temperature (°C)");
 
-            // create x-axis label
+            // Create x-axis label
             svg.append('text')
                 .attr("class", "label")
                 .attr("x", chartWidth / 2.0 + margin.left)
@@ -175,7 +192,7 @@
                 .style("fill", "white")
                 .text("Year");
 
-            // construct line
+            // Construct line
             chartArea.append("path")
                 .datum(data)
                 .attr("fill", "none")
@@ -186,7 +203,7 @@
                     .y(d => dataScale(d.temperature))
                 );
 
-            // elevate plotted line above gridlines
+            // Elevate plotted line above gridlines
             chartArea.raise();
 
             // Add point for current year if it exists
