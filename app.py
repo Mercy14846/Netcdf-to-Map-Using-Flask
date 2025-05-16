@@ -200,21 +200,22 @@ def get_time_series():
         
         # Get time values from the dataset
         time_values = pd.to_datetime(time_data.time.values)
-        years = time_values.year
+        years = time_values.year.tolist()  # Convert to list to ensure it's iterable
         
-        # Create a DataFrame with the time index and temperature values
-        if hasattr(ts_slice, 'time'):
-            # If we have a DataArray with a time dimension
-            df_slice = pd.DataFrame({
-                'year': years,
-                'temperature': ts_slice.values
-            }, index=range(len(years)))
-        else:
-            # If we have a scalar value, create a DataFrame with the time values
-            df_slice = pd.DataFrame({
-                'year': years,
-                'temperature': [float(ts_slice)] * len(years)
-            }, index=range(len(years)))
+        try:
+            # If ts_slice is a DataArray with time dimension
+            temp_values = ts_slice.values
+            if not isinstance(temp_values, np.ndarray):
+                temp_values = np.array([temp_values])
+        except:
+            # If ts_slice is a scalar value
+            temp_values = np.full(len(years), float(ts_slice))
+        
+        # Create DataFrame ensuring both arrays are the same length
+        df_slice = pd.DataFrame({
+            'year': years[:len(temp_values)],
+            'temperature': temp_values[:len(years)]
+        })
         
         print("DataFrame shape:", df_slice.shape)
         print("DataFrame head:", df_slice.head())

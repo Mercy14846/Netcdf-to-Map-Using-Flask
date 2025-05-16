@@ -14,6 +14,16 @@
 
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/site.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .error-message {
+            color: red;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
   </head>
   <body>
     <div id="map"></div>
@@ -22,13 +32,13 @@
             <p>Latitude: <span id="lat-update">--</span></p>
             <p>Longitude: <span id="lon-update">--</span></p>
             <p>Temperature: <span id="temp-update">--</span></p>
+            <div id="error-message" class="error-message"></div>
         </div>
         <svg id="time-series-chart" width="400" height="300"></svg>
     </div>
 
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
     <script>
-        // Initialize D3 chart elements
         const svg = d3.select("svg#time-series-chart");
         const width = +svg.attr("width");
         const height = +svg.attr("height");
@@ -46,20 +56,35 @@
             .attr("id", "points")
             .attr("transform", `translate(${margin.left},${margin.top})`);
 
-        // Listen for map click events
-        map.on('mousemove', function(e) {
-            let currentLat = e.latlng.lat;
-            let currentLon = e.latlng.lng;
-            document.getElementById('lat-update').innerHTML = (Math.abs(currentLat).toFixed(2)) + "°" + (currentLat >= 0 ? 'N' : 'S');
-            document.getElementById('lon-update').innerHTML = (Math.abs(currentLon).toFixed(2)) + "°" + (currentLon >= 0 ? 'E' : 'W');
-        });
-
-        map.on('click', function(e) {
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            // Clear the chart
             annotations.selectAll("*").remove();
             chartArea.selectAll("*").remove();
             svg.selectAll(".label").remove();
+            
+            // Clear temperature display
+            document.getElementById('temp-update').textContent = '--';
+        }
 
+        function clearError() {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+        }
+
+        map.on('click', function(e) {
+            clearError();
             let clickedCoords = e.latlng;
+            
+            // Update coordinates display
+            document.getElementById('lat-update').textContent = 
+                (Math.abs(clickedCoords.lat).toFixed(2)) + "°" + (clickedCoords.lat >= 0 ? 'N' : 'S');
+            document.getElementById('lon-update').textContent = 
+                (Math.abs(clickedCoords.lng).toFixed(2)) + "°" + (clickedCoords.lng >= 0 ? 'E' : 'W');
             
             fetch('/time-series', {
                 method: 'POST',
@@ -73,15 +98,15 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error('Network response was not ok');
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Network response was not ok');
+                    });
                 }
                 return response.json();
             })
             .then(data => {
                 if (data.error) {
-                    console.error('Server error:', data.error);
-                    showError('Server error: ' + data.error);
-                    return;
+                    throw new Error(data.error);
                 }
                 try {
                     timeSeriesData = JSON.parse(data.data);
@@ -92,27 +117,14 @@
                     }
                     plotData(timeSeriesData, clickedCoords);
                 } catch (error) {
-                    console.error('Error parsing time series data:', error);
-                    showError('Error parsing data');
+                    throw new Error('Error parsing data: ' + error.message);
                 }
             })
             .catch(error => {
-                console.error('Network error:', error);
-                showError('Network error: ' + error.message);
+                console.error('Error:', error);
+                showError(error.message);
             });
         });
-
-        function showError(message) {
-            annotations.selectAll("*").remove();
-            chartArea.selectAll("*").remove();
-            
-            annotations.append("text")
-                .attr("x", width / 2)
-                .attr("y", height / 2)
-                .attr("text-anchor", "middle")
-                .style("fill", "red")
-                .text(message);
-        }
 
         function plotData(data, clickedCoords) {
             if (!Array.isArray(data) || data.length === 0) {
@@ -120,19 +132,24 @@
                 return;
             }
 
-            // Ensure data is of type Number
+            clearError();
+            annotations.selectAll("*").remove();
+            chartArea.selectAll("*").remove();
+            svg.selectAll(".label").remove();
+
+            // ensure data is of type Number
             data.forEach(d => {
                 d.year = Number(d.year);
                 d.temperature = Number(d.temperature);
             });
 
-            // Construct scales for the x-axis and y-axis based on data range
+            // construct scales for the x-axis and y-axis based on data range
             const xDomain = d3.extent(data, d => d.year);
             const yDomain = d3.extent(data, d => d.temperature);
             const timeScale = d3.scaleLinear().domain(xDomain).range([0, chartWidth]);
             const dataScale = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
 
-            // Construct y-axis
+            // construct y-axis
             let leftAxis = d3.axisLeft(dataScale);
             let leftGridlines = d3.axisLeft(dataScale)
                                 .tickSize(-chartWidth-10)
@@ -147,7 +164,7 @@
                     .attr("transform", `translate(${margin.left-10},${margin.top})`)
                     .call(leftGridlines);
 
-            // Construct x-axis
+            // construct x-axis
             let bottomAxis = d3.axisBottom(timeScale).tickFormat(d3.format("d"));
             let bottomGridlines = d3.axisBottom(timeScale)
                                 .tickSize(-chartHeight-10)
@@ -161,7 +178,7 @@
                     .attr("transform", `translate(${margin.left},${chartHeight + margin.top+10})`)
                     .call(bottomGridlines);
 
-            // Create plot title
+            // create plot title
             annotations.append('text')
                 .attr("x", chartWidth / 2.0 + margin.left)
                 .attr("y", 15)
@@ -171,7 +188,7 @@
                 .style("fill", "white")
                 .text("Time Series for " + clickedCoords.lat.toFixed(2) + "°, " + clickedCoords.lng.toFixed(2) + "°");
             
-            // Create y-axis label
+            // create y-axis label
             svg.append("text")
                .attr("class", "label")
                .attr("x", -chartHeight/2.0 - margin.top)
@@ -182,7 +199,7 @@
                .style("fill", "white")
                .text("Surface Temperature (°C)");
 
-            // Create x-axis label
+            // create x-axis label
             svg.append('text')
                 .attr("class", "label")
                 .attr("x", chartWidth / 2.0 + margin.left)
@@ -192,7 +209,7 @@
                 .style("fill", "white")
                 .text("Year");
 
-            // Construct line
+            // construct line
             chartArea.append("path")
                 .datum(data)
                 .attr("fill", "none")
@@ -203,7 +220,7 @@
                     .y(d => dataScale(d.temperature))
                 );
 
-            // Elevate plotted line above gridlines
+            // elevate plotted line above gridlines
             chartArea.raise();
 
             // Add point for current year if it exists
