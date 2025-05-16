@@ -104,22 +104,7 @@
                 }
                 return response.json();
             })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                try {
-                    timeSeriesData = JSON.parse(data.data);
-                    console.log('Parsed time series data:', timeSeriesData);
-                    if (timeSeriesData.length > 0) {
-                        const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
-                        document.getElementById('temp-update').textContent = latestTemp.toFixed(2) + '°C';
-                    }
-                    plotData(timeSeriesData, clickedCoords);
-                } catch (error) {
-                    throw new Error('Error parsing data: ' + error.message);
-                }
-            })
+                        .then(data => {                if (data.error) {                    throw new Error(data.error);                }                                // The data is already parsed JSON, no need for JSON.parse                timeSeriesData = data.data;                console.log('Time series data:', timeSeriesData);                                if (timeSeriesData.length > 0) {                    const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;                    document.getElementById('temp-update').textContent = latestTemp.toFixed(2) + '°C';                }                                plotData(timeSeriesData, clickedCoords);            })
             .catch(error => {
                 console.error('Error:', error);
                 showError(error.message);
