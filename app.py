@@ -75,7 +75,7 @@ def generateatile(zoom, longitude, latitude):
     # Add caching
     cache_key = f"tile_{zoom}_{longitude}_{latitude}"
     cached_tile = cache.get(cache_key)
-    if cached_tile:
+    if cached_tile is not None:
         return cached_tile
 
     # The function takes the zoom and tile path from the web request,
