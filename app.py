@@ -199,5 +199,15 @@ def get_time_range():
         'steps': len(time_coords)
     })
 
+@app.route('/api/legend/<layer_name>')
+def get_legend(layer_name):
+    if layer_name == 'temperature':
+        return jsonify({
+            'min': min_val,
+            'max': max_val,
+            'units': '°C',
+            'colors': colorcet.coolwarm
+        })
+
 if __name__ == '__main__':
    app.run(debug=True)
