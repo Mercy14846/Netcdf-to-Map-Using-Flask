@@ -100,19 +100,37 @@
                 }
             })
             .then(response => {
+                console.log('Raw response:', response);
                 if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Network response was not ok');
+                    return response.text().then(text => {
+                        console.log('Error response text:', text);
+                        try {
+                            const err = JSON.parse(text);
+                            throw new Error(err.error || 'Network response was not ok');
+                        } catch (e) {
+                            throw new Error(text || 'Network response was not ok');
+                        }
                     });
                 }
-                return response.json();
+                return response.text().then(text => {
+                    console.log('Response text:', text);
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        console.error('JSON parse error:', e);
+                        throw new Error('Invalid JSON response from server');
+                    }
+                });
             })
             .then(data => {
+                console.log('Parsed data:', data);
+                
                 if (data.error) {
                     throw new Error(data.error);
                 }
                 
                 if (!data.data || !Array.isArray(data.data)) {
+                    console.error('Invalid data structure:', data);
                     throw new Error('Invalid data format received from server');
                 }
                 
@@ -133,7 +151,7 @@
                 plotData(timeSeriesData, clickedCoords);
             })
             .catch(error => {
-                console.error('Error:', error);
+                console.error('Error details:', error);
                 showError(error.message);
                 document.getElementById('temp-update').textContent = '--';
             });
