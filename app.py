@@ -200,7 +200,12 @@ def get_time_series():
         
         # Get time values from the dataset
         time_values = pd.to_datetime(time_data.time.values)
-        years = time_values.year.tolist()  # Convert to list to ensure it's iterable
+        
+        # Handle both array and scalar year values
+        if isinstance(time_values.year, (int, np.integer)):
+            years = [int(time_values.year)]
+        else:
+            years = time_values.year.tolist()  # Convert to list to ensure it's iterable
         
         try:
             # If ts_slice is a DataArray with time dimension
