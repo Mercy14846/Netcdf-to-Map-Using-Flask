@@ -120,7 +120,7 @@ def generateatile(zoom, longitude, latitude):
         )
         
         if frame.size == 0:
-            return create_empty_tile()
+            return create_empty_tile() # type: ignore
 
         csv = ds.Canvas(plot_width=256, plot_height=256, 
                        x_range=(xleft, xright), 
@@ -136,7 +136,7 @@ def generateatile(zoom, longitude, latitude):
         return img.to_pil()
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
-        return create_empty_tile()
+        return create_empty_tile() # type: ignore
 
 @app.route("/")
 def index():
