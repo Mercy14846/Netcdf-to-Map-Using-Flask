@@ -1,8 +1,9 @@
+numpy==1.24.3
+xarray==2023.12.0
+netCDF4==1.6.5
 Flask==3.0.2
-Flask-Caching==2.1.0
-xarray==2024.2.0
 pandas==2.2.1
 datashader==0.16.0
 colorcet==3.0.1
-numpy>=1.26.0
-netCDF4==1.6.5 
+matplotlib==3.8.3
+Flask-Caching==2.1.0 
