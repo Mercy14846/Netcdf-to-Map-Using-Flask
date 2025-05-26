@@ -11,6 +11,7 @@ import datashader as ds
 import pandas as pd
 import xarray as xr
 import colorcet
+import matplotlib.colors as mcolors
 
 from datashader import transfer_functions as tf
 from datashader.utils import lnglat_to_meters
@@ -68,6 +69,23 @@ def create_empty_tile():
     # Create a transparent 256x256 RGBA image
     img = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
     return img
+
+def create_colormap():
+    # Define temperature breakpoints and corresponding colors
+    temps = [-40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    colors = [
+        '#68001a', '#7a0024', '#8c002e', '#9e0038', '#b00042',
+        '#c2004c', '#d40056', '#e60060', '#ff206e', '#ff4081',
+        '#ff6094', '#ff80a7', '#ffa0ba', '#ffc0cd', '#ffe0e0',
+        '#ffffff', '#e6ffff', '#ccffff', '#99ffff', '#80ffff'
+    ]
+    
+    # Normalize temperature values
+    norm_temps = [(t - min(temps)) / (max(temps) - min(temps)) for t in temps]
+    
+    # Create custom colormap
+    custom_cmap = mcolors.LinearSegmentedColormap.from_list('custom_temp', list(zip(norm_temps, colors)))
+    return custom_cmap
 
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
@@ -137,7 +155,6 @@ def generateatile(zoom, longitude, latitude):
         
         print(f"Frame shape: {frame.sizes}")
         
-        # Check if frame is empty using sizes
         if any(size == 0 for size in frame.sizes.values()):
             print("Empty frame, returning empty tile")
             return create_empty_tile()
@@ -147,7 +164,10 @@ def generateatile(zoom, longitude, latitude):
                        y_range=(yright, yleft))
         agg = csv.quadmesh(frame, x='longitude', y='latitude', 
                           agg=ds.mean('tmin'))
-        img = tf.shade(agg, cmap=colorcet.coolwarm, 
+        
+        # Use custom colormap
+        custom_cmap = create_colormap()
+        img = tf.shade(agg, cmap=custom_cmap, 
                       span=[min_val, max_val], 
                       how="linear")
         
