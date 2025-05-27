@@ -174,7 +174,7 @@ def generateatile(zoom, longitude, latitude):
                        y_range=(yright, yleft))
 
         # Extract temperature data and handle NaN values
-        temp_data = frame['tmin'].fillna(0)
+        temp_data = frame['tmin'].fillna(np.nan)  # Use NaN instead of 0
         
         # Create aggregation
         agg = csv.quadmesh(temp_data,
@@ -195,11 +195,19 @@ def generateatile(zoom, longitude, latitude):
                       span=[min_val, max_val],
                       how='linear')
         
-        # Add alpha channel for transparency where there's no data
-        img = tf.set_background(img, 'transparent')
+        # Convert to RGBA array
+        img_data = np.array(img.data)
         
-        # Convert to PIL image
-        pil_img = Image.fromarray(np.array(img.data))
+        # Create alpha channel: transparent where there's no data
+        alpha = np.where(np.isnan(agg.values), 0, 255)
+        
+        # Create RGBA image
+        rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
+        rgba[..., :3] = img_data[..., :3]  # Copy RGB channels
+        rgba[..., 3] = alpha  # Set alpha channel
+        
+        # Convert to PIL image with transparency
+        pil_img = Image.fromarray(rgba, mode='RGBA')
         
         # Cache the result
         cache.set(cache_key, pil_img, timeout=3600)
