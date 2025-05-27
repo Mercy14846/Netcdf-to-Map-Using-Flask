@@ -90,25 +90,23 @@ def create_empty_tile():
     return img
 
 def create_colormap():
-    # Define temperature breakpoints and corresponding colors matching OpenWeatherMap style
-    temps = [-40, -30, -20, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    # Define temperature breakpoints and corresponding colors with brighter values
+    temps = [-40, -30, -20, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40]
     colors = [
-        '#91009b',  # Deep purple (Very cold)
-        '#784beb',  # Purple
-        '#2f3ded',  # Deep blue
-        '#2681f2',  # Blue
-        '#1ec1ff',  # Light blue
-        '#48f5f7',  # Cyan
-        '#7dfa80',  # Light green
-        '#c1f651',  # Yellow-green
-        '#ffed3d',  # Yellow
-        '#ffc33b',  # Light orange
-        '#ff9d35',  # Orange
-        '#ff6b37',  # Dark orange
-        '#ff4333',  # Light red
-        '#e92c2c',  # Red
-        '#d42020',  # Dark red
-        '#cc1414'   # Very dark red
+        '#0000FF',  # Bright Blue (Very cold)
+        '#00FFFF',  # Cyan (Cold)
+        '#00FF90',  # Bright Turquoise
+        '#00FF00',  # Bright Green
+        '#80FF00',  # Lime Green
+        '#FFFF00',  # Bright Yellow
+        '#FFC000',  # Bright Orange
+        '#FF8000',  # Dark Orange
+        '#FF4000',  # Light Red
+        '#FF0000',  # Pure Red
+        '#FF0040',  # Red-Pink
+        '#FF0080',  # Bright Pink
+        '#FF00FF',  # Magenta
+        '#800080'   # Purple
     ]
     
     # Create normalized temperature values (0 to 1)
@@ -118,7 +116,7 @@ def create_colormap():
     custom_cmap = mcolors.LinearSegmentedColormap.from_list(
         'custom_temp',
         list(zip(norm_temps, colors)),
-        N=len(temps)  # Use exact number of color stops to match legend precisely
+        N=256  # Increase color resolution for smoother gradients
     )
     
     return custom_cmap
