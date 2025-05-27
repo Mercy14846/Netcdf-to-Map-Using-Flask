@@ -196,19 +196,16 @@ def generateatile(zoom, longitude, latitude):
                       span=[min_val, max_val],
                       how='linear')
         
-        # Enhance contrast and brightness
-        img = tf.set_background(img, 'transparent')
-        
         # Convert to RGBA
         img_data = np.array(img.data)
         
-        # Create alpha channel - make valid data more opaque
+        # Create alpha channel based on data validity
         alpha = np.where(np.isnan(agg.values), 0, 255).astype(np.uint8)
         
-        # Create final RGBA image with enhanced opacity
+        # Create final RGBA image with transparency
         rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
-        rgba[..., :3] = img_data[..., :3]
-        rgba[..., 3] = alpha
+        rgba[..., :3] = img_data[..., :3]  # Copy RGB channels
+        rgba[..., 3] = alpha  # Set alpha channel
         
         # Resize to 256x256 if needed
         if resolution != 256:
