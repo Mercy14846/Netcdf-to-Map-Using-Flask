@@ -144,18 +144,23 @@ def generateatile(zoom, longitude, latitude):
         print(f"Processing tile: zoom={zoom}, lon={longitude}, lat={latitude}")
         print(f"Bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
 
-        # Get data for the tile
+        # Get data for the tile with a small buffer to prevent gaps
+        buffer = 0.1  # Add a small buffer around the tile
         frame = data_array.sel(
-            longitude=slice(min(xleft, xright), max(xleft, xright)),
-            latitude=slice(max(yleft, yright), min(yleft, yright))
+            longitude=slice(min(xleft, xright) - buffer, max(xleft, xright) + buffer),
+            latitude=slice(max(yleft, yright) + buffer, min(yleft, yright) - buffer)
         )
 
         if frame.size == 0:
             print("No data in selected region")
             return create_empty_tile()
 
+        # Adjust resolution based on zoom level
+        resolution = min(256, 2 ** (zoom + 4))  # Increase resolution at higher zoom levels
+        
         # Create canvas and render data
-        canvas = ds.Canvas(plot_width=256, plot_height=256,
+        canvas = ds.Canvas(plot_width=resolution, 
+                         plot_height=resolution,
                          x_range=(xleft, xright),
                          y_range=(yright, yleft))
 
@@ -167,35 +172,46 @@ def generateatile(zoom, longitude, latitude):
             print("No valid temperature data in region")
             return create_empty_tile()
 
-        # Create aggregation using points instead of quadmesh
+        # Create aggregation using points with dynamic spreading based on zoom
+        spread = max(1, 8 - zoom/2)  # Adjust spreading based on zoom level
         agg = canvas.points(df, 
                           x='longitude', 
                           y='latitude',
                           agg=ds.mean(temp_var))
+        
+        # Apply spreading to fill gaps
+        agg = ds.tf.spread(agg, px=spread)
 
         if agg is None:
             print("Aggregation failed")
             return create_empty_tile()
 
-        # Shade the data
+        # Shade the data with increased contrast
         img = tf.shade(agg, 
                       cmap=create_colormap(),
                       span=[min_val, max_val],
                       how='linear')
-
+        
+        # Enhance contrast and brightness
+        img = tf.set_background(img, 'transparent')
+        
         # Convert to RGBA
         img_data = np.array(img.data)
         
-        # Create alpha channel
+        # Create alpha channel - make valid data more opaque
         alpha = np.where(np.isnan(agg.values), 0, 255).astype(np.uint8)
         
-        # Create final RGBA image
+        # Create final RGBA image with enhanced opacity
         rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
         rgba[..., :3] = img_data[..., :3]
         rgba[..., 3] = alpha
-
-        # Convert to PIL image
-        pil_img = Image.fromarray(rgba, mode='RGBA')
+        
+        # Resize to 256x256 if needed
+        if resolution != 256:
+            pil_img = Image.fromarray(rgba, mode='RGBA')
+            pil_img = pil_img.resize((256, 256), Image.Resampling.LANCZOS)
+        else:
+            pil_img = Image.fromarray(rgba, mode='RGBA')
         
         # Cache the result
         cache.set(cache_key, pil_img, timeout=3600)
