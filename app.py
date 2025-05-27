@@ -90,28 +90,25 @@ def create_empty_tile():
     return img
 
 def create_colormap():
-    # Define temperature breakpoints and corresponding colors from light red to deep red
-    temps = [-40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+    # Define temperature breakpoints and corresponding colors matching OpenWeatherMap style
+    temps = [-40, -30, -20, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
     colors = [
-        '#ffcdd2',  # Lightest red <= -40
-        '#ffbdc1',
-        '#ffadb2',
-        '#ff9ea3',
-        '#ff8e94',
-        '#ff7e85',
-        '#ff6b73',
-        '#ff5c64',
-        '#ff4d55',
-        '#ff3d46',
-        '#ff2e37',
-        '#ff1f28',
-        '#ff0f19',
-        '#ff000a',
-        '#ef0008',
-        '#df0007',
-        '#cf0006',
-        '#bf0005',
-        '#8B0000'   # Darkest red (dark red) <= 50
+        '#91009b',  # Deep purple (Very cold)
+        '#784beb',  # Purple
+        '#2f3ded',  # Deep blue
+        '#2681f2',  # Blue
+        '#1ec1ff',  # Light blue
+        '#48f5f7',  # Cyan
+        '#7dfa80',  # Light green
+        '#c1f651',  # Yellow-green
+        '#ffed3d',  # Yellow
+        '#ffc33b',  # Light orange
+        '#ff9d35',  # Orange
+        '#ff6b37',  # Dark orange
+        '#ff4333',  # Light red
+        '#e92c2c',  # Red
+        '#d42020',  # Dark red
+        '#cc1414'   # Very dark red
     ]
     
     # Create normalized temperature values (0 to 1)
