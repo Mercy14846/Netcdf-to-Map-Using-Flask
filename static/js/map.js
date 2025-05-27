@@ -18,10 +18,16 @@ const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/
 // Set default base layer
 osmLayer.addTo(map);
 
-// Create temperature layer
+// Create temperature layer with improved options
 const temperatureLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
     maxZoom: 19,
-    opacity: 0.7
+    minZoom: 3,
+    opacity: 0.85,
+    tileSize: 256,
+    zIndex: 1,
+    updateWhenIdle: false,
+    updateWhenZooming: true,
+    keepBuffer: 2
 });
 
 // Add layers to map
