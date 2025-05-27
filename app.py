@@ -77,14 +77,23 @@ def create_colormap():
         '#68001a', '#7a0024', '#8c002e', '#9e0038', '#b00042',
         '#c2004c', '#d40056', '#e60060', '#ff206e', '#ff4081',
         '#ff6094', '#ff80a7', '#ffa0ba', '#ffc0cd', '#ffe0e0',
-        '#ffffff', '#e6ffff', '#ccffff', '#99ffff', '#80ffff'
+        '#ffffff', '#e6ffff', '#ccffff', '#99ffff'
     ]
     
-    # Normalize temperature values
+    # Ensure we have the same number of colors as temperature intervals
+    if len(colors) < len(temps):
+        colors.append('#80ffff')  # Add the last color if needed
+    
+    # Create normalized temperature values (0 to 1)
     norm_temps = [(t - min(temps)) / (max(temps) - min(temps)) for t in temps]
     
-    # Create custom colormap
-    custom_cmap = mcolors.LinearSegmentedColormap.from_list('custom_temp', list(zip(norm_temps, colors)))
+    # Create the colormap with proper normalization
+    custom_cmap = mcolors.LinearSegmentedColormap.from_list(
+        'custom_temp',
+        list(zip(norm_temps, colors)),
+        N=256  # Number of color levels
+    )
+    
     return custom_cmap
 
 # https://github.com/ScottSyms/tileshade/
