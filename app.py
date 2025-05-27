@@ -71,27 +71,38 @@ def create_empty_tile():
     return img
 
 def create_colormap():
-    # Define temperature breakpoints and corresponding colors
+    # Define temperature breakpoints and corresponding colors to match the legend exactly
     temps = [-40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
     colors = [
-        '#68001a', '#7a0024', '#8c002e', '#9e0038', '#b00042',
-        '#c2004c', '#d40056', '#e60060', '#ff206e', '#ff4081',
-        '#ff6094', '#ff80a7', '#ffa0ba', '#ffc0cd', '#ffe0e0',
-        '#ffffff', '#e6ffff', '#ccffff', '#99ffff'
+        '#68001a',  # <= -40
+        '#7a0024',  # <= -35
+        '#8c002e',  # <= -30
+        '#9e0038',  # <= -25
+        '#b00042',  # <= -20
+        '#c2004c',  # <= -15
+        '#d40056',  # <= -10
+        '#e60060',  # <= -5
+        '#ff206e',  # <= 0
+        '#ff4081',  # <= 5
+        '#ff6094',  # <= 10
+        '#ff80a7',  # <= 15
+        '#ffa0ba',  # <= 20
+        '#ffc0cd',  # <= 25
+        '#ffe0e0',  # <= 30
+        '#ffffff',  # <= 35
+        '#e6ffff',  # <= 40
+        '#ccffff',  # <= 45
+        '#99ffff'   # <= 50
     ]
-    
-    # Ensure we have the same number of colors as temperature intervals
-    if len(colors) < len(temps):
-        colors.append('#80ffff')  # Add the last color if needed
     
     # Create normalized temperature values (0 to 1)
     norm_temps = [(t - min(temps)) / (max(temps) - min(temps)) for t in temps]
     
-    # Create the colormap with proper normalization
+    # Create the colormap with exact color stops
     custom_cmap = mcolors.LinearSegmentedColormap.from_list(
         'custom_temp',
         list(zip(norm_temps, colors)),
-        N=256  # Number of color levels
+        N=len(temps)  # Use exact number of color stops to match legend precisely
     )
     
     return custom_cmap
