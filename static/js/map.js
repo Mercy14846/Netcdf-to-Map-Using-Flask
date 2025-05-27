@@ -1,7 +1,7 @@
 // Initialize the map with better default view
 const map = L.map('map', {
-    center: [20, 0],
-    zoom: 3,
+    center: [4.0119967, 28.4863963],
+    zoom: 4,
     zoomControl: false
 });
 
