@@ -124,7 +124,8 @@ body {
 
 .temperature-value {
     font-weight: bold;
-    color: #d23430;
+    color: #ff4333;
+    font-size: 16px;
 }
 
 /* Weather icons */
