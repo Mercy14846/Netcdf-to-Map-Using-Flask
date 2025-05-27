@@ -159,24 +159,43 @@ def generateatile(zoom, longitude, latitude):
             print("Empty frame, returning empty tile")
             return create_empty_tile()
 
-        csv = ds.Canvas(plot_width=256, plot_height=256, 
-                       x_range=(xleft, xright), 
+        # Create canvas for rendering
+        csv = ds.Canvas(plot_width=256, plot_height=256,
+                       x_range=(xleft, xright),
                        y_range=(yright, yleft))
-        agg = csv.quadmesh(frame, x='longitude', y='latitude', 
+
+        # Extract temperature data and handle NaN values
+        temp_data = frame['tmin'].fillna(0)
+        
+        # Create aggregation
+        agg = csv.quadmesh(temp_data,
+                          x='longitude',
+                          y='latitude',
                           agg=ds.mean('tmin'))
         
-        # Use custom colormap
+        if agg is None or agg.isnull().all().all():
+            print("No valid data in aggregation")
+            return create_empty_tile()
+
+        # Create custom colormap
         custom_cmap = create_colormap()
-        img = tf.shade(agg, cmap=custom_cmap, 
-                      span=[min_val, max_val], 
-                      how="linear")
         
-        # Convert datashader image to PIL Image
+        # Apply shading with proper value range
+        img = tf.shade(agg,
+                      cmap=custom_cmap,
+                      span=[min_val, max_val],
+                      how='linear')
+        
+        # Add alpha channel for transparency where there's no data
+        img = tf.set_background(img, 'transparent')
+        
+        # Convert to PIL image
         pil_img = Image.fromarray(np.array(img.data))
         
         # Cache the result
         cache.set(cache_key, pil_img, timeout=3600)
         return pil_img
+
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
         return create_empty_tile()
