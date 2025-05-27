@@ -71,28 +71,28 @@ def create_empty_tile():
     return img
 
 def create_colormap():
-    # Define temperature breakpoints and corresponding colors to match the legend exactly
+    # Define temperature breakpoints and corresponding colors from light red to deep red
     temps = [-40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
     colors = [
-        '#68001a',  # <= -40
-        '#7a0024',  # <= -35
-        '#8c002e',  # <= -30
-        '#9e0038',  # <= -25
-        '#b00042',  # <= -20
-        '#c2004c',  # <= -15
-        '#d40056',  # <= -10
-        '#e60060',  # <= -5
-        '#ff206e',  # <= 0
-        '#ff4081',  # <= 5
-        '#ff6094',  # <= 10
-        '#ff80a7',  # <= 15
-        '#ffa0ba',  # <= 20
-        '#ffc0cd',  # <= 25
-        '#ffe0e0',  # <= 30
-        '#ffffff',  # <= 35
-        '#e6ffff',  # <= 40
-        '#ccffff',  # <= 45
-        '#99ffff'   # <= 50
+        '#ffcdd2',  # Lightest red <= -40
+        '#ffbdc1',
+        '#ffadb2',
+        '#ff9ea3',
+        '#ff8e94',
+        '#ff7e85',
+        '#ff6b73',
+        '#ff5c64',
+        '#ff4d55',
+        '#ff3d46',
+        '#ff2e37',
+        '#ff1f28',
+        '#ff0f19',
+        '#ff000a',
+        '#ef0008',
+        '#df0007',
+        '#cf0006',
+        '#bf0005',
+        '#8B0000'   # Darkest red (dark red) <= 50
     ]
     
     # Create normalized temperature values (0 to 1)
