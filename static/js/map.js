@@ -97,7 +97,7 @@ legend.onAdd = function (map) {
     
     // Create a gradient background for the legend
     const gradientHeight = 200;
-    const tempRange = [-40, 50];  // min to max temperature
+    const tempRange = [-40, 40];  // min to max temperature
     
     div.innerHTML = `
         <div class="legend-title">Temperature (°C)</div>
@@ -105,14 +105,20 @@ legend.onAdd = function (map) {
             height: ${gradientHeight}px;
             background: linear-gradient(
                 to bottom,
-                #cc1414,  /* Very hot */
-                #ff4333,  /* Hot */
-                #ff9d35,  /* Warm */
-                #ffed3d,  /* Mild */
-                #7dfa80,  /* Cool */
-                #48f5f7,  /* Cold */
-                #2681f2,  /* Very cold */
-                #91009b   /* Extremely cold */
+                #800080,  /* Purple (Hottest) */
+                #FF00FF,  /* Magenta */
+                #FF0080,  /* Bright Pink */
+                #FF0040,  /* Red-Pink */
+                #FF0000,  /* Pure Red */
+                #FF4000,  /* Light Red */
+                #FF8000,  /* Dark Orange */
+                #FFC000,  /* Bright Orange */
+                #FFFF00,  /* Bright Yellow */
+                #80FF00,  /* Lime Green */
+                #00FF00,  /* Bright Green */
+                #00FF90,  /* Bright Turquoise */
+                #00FFFF,  /* Cyan */
+                #0000FF   /* Bright Blue (Coldest) */
             );
             width: 30px;
             margin-right: 10px;
@@ -121,7 +127,7 @@ legend.onAdd = function (map) {
         <div class="gradient-labels" style="margin-left: 40px;">
             <div style="height: ${gradientHeight}px; position: relative;">
                 <span style="position: absolute; top: 0;">${tempRange[1]}°C</span>
-                <span style="position: absolute; top: 50%;">5°C</span>
+                <span style="position: absolute; top: 50%;">0°C</span>
                 <span style="position: absolute; bottom: 0;">${tempRange[0]}°C</span>
             </div>
         </div>
@@ -212,16 +218,22 @@ temperatureLayer.on('tileerror', hideLoading);
 
 // Function to get color based on temperature using gradient interpolation
 function getColor(temp) {
-    // Define color stops for the gradient
+    // Define color stops for the gradient with brighter colors
     const colorStops = [
-        { temp: -40, color: '#91009b' },  // Extremely cold
-        { temp: -30, color: '#2681f2' },  // Very cold
-        { temp: -20, color: '#48f5f7' },  // Cold
-        { temp: -10, color: '#7dfa80' },  // Cool
-        { temp: 0, color: '#ffed3d' },    // Mild
-        { temp: 20, color: '#ff9d35' },   // Warm
-        { temp: 35, color: '#ff4333' },   // Hot
-        { temp: 50, color: '#cc1414' }    // Very hot
+        { temp: -40, color: '#0000FF' },  // Bright Blue (Very cold)
+        { temp: -30, color: '#00FFFF' },  // Cyan
+        { temp: -20, color: '#00FF90' },  // Bright Turquoise
+        { temp: -10, color: '#00FF00' },  // Bright Green
+        { temp: -5, color: '#80FF00' },   // Lime Green
+        { temp: 0, color: '#FFFF00' },    // Bright Yellow
+        { temp: 5, color: '#FFC000' },    // Bright Orange
+        { temp: 10, color: '#FF8000' },   // Dark Orange
+        { temp: 15, color: '#FF4000' },   // Light Red
+        { temp: 20, color: '#FF0000' },   // Pure Red
+        { temp: 25, color: '#FF0040' },   // Red-Pink
+        { temp: 30, color: '#FF0080' },   // Bright Pink
+        { temp: 35, color: '#FF00FF' },   // Magenta
+        { temp: 40, color: '#800080' }    // Purple
     ];
 
     // Find the color stops between which the temperature falls
