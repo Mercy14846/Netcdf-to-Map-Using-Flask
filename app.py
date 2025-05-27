@@ -24,21 +24,40 @@ cache = Cache(app, config={
     'CACHE_DEFAULT_TIMEOUT': 3600
 })
 
-# import dataset
-data = xr.open_dataset("static/data/temp_2m.nc")
-time_data = xr.open_dataset("static/data/temperature.nc")
-
-# Print dataset info for debugging
-print("Time data structure:", time_data)
-
-# find min/max data values to set global colorbar
-min_val = float(data['tmin'].min())
-max_val = float(data['tmax'].max())
-
-# extract dimensions
-lon_array = data['longitude']
-lat_array = data['latitude']
-data_array = data['tmin']
+# import dataset and handle missing values properly
+try:
+    data = xr.open_dataset("static/data/temp_2m.nc")
+    time_data = xr.open_dataset("static/data/temperature.nc")
+    
+    # Print dataset info for debugging
+    print("Main data structure:", data)
+    print("Time data structure:", time_data)
+    
+    # Ensure the temperature variable exists and get its name
+    temp_var = None
+    for var in data.data_vars:
+        if var in ['tmin', 'temp', 'temperature', 't2m']:
+            temp_var = var
+            break
+    
+    if temp_var is None:
+        print("Available variables in data:", list(data.data_vars))
+        raise ValueError("Could not find temperature variable in data")
+    
+    # find min/max data values to set global colorbar
+    min_val = float(data[temp_var].min())
+    max_val = float(data[temp_var].max())
+    
+    print(f"Temperature range: {min_val} to {max_val}")
+    
+    # extract dimensions
+    lon_array = data['longitude']
+    lat_array = data['latitude']
+    data_array = data[temp_var]
+    
+except Exception as e:
+    print(f"Error loading data: {str(e)}")
+    raise
 
 # Extract time series data array - assuming 'tmin' or 'temperature' is the variable name
 time_data_var = None
@@ -116,108 +135,71 @@ def generateatile(zoom, longitude, latitude):
     if cached_tile is not None:
         return cached_tile
 
-    # The function takes the zoom and tile path from the web request,
-    # and determines the top left and bottom right coordinates of the tile.
-    # This information is used to query against the dataframe.
-    xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
-    xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
-
-    # Convert mercator coordinates back to lat/lon
-    xleft = xleft / 20037508.34 * 180
-    xright = xright / 20037508.34 * 180
-    yleft = math.degrees(2 * math.atan(math.exp(yleft / 20037508.34 * math.pi)) - math.pi/2)
-    yright = math.degrees(2 * math.atan(math.exp(yright / 20037508.34 * math.pi)) - math.pi/2)
-
-    print(f"Tile coordinates: zoom={zoom}, lon={longitude}, lat={latitude}")
-    print(f"Mercator bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
-
-    # Get all longitude and latitude values
-    lon_values = lon_array.values
-    lat_values = lat_array.values
-
-    # Find nearest coordinates
-    xleft_idx = abs(lon_values - xleft).argmin()
-    xright_idx = abs(lon_values - xright).argmin()
-    yleft_idx = abs(lat_values - yleft).argmin()
-    yright_idx = abs(lat_values - yright).argmin()
-
-    # Ensure we have at least 2 points in each dimension
-    if xleft_idx == xright_idx and xleft_idx < len(lon_values) - 1:
-        xright_idx = xleft_idx + 1
-    elif xleft_idx == xright_idx:
-        xleft_idx = xright_idx - 1
-
-    if yleft_idx == yright_idx and yleft_idx < len(lat_values) - 1:
-        yright_idx = yleft_idx + 1
-    elif yleft_idx == yright_idx:
-        yleft_idx = yright_idx - 1
-
-    # Get the actual coordinate values
-    xleft_snapped = lon_values[xleft_idx]
-    xright_snapped = lon_values[xright_idx]
-    yleft_snapped = lat_values[yleft_idx]
-    yright_snapped = lat_values[yright_idx]
-
-    # Ensure correct ordering
-    if xleft_snapped > xright_snapped:
-        xleft_snapped, xright_snapped = xright_snapped, xleft_snapped
-    if yleft_snapped < yright_snapped:
-        yleft_snapped, yright_snapped = yright_snapped, yleft_snapped
-
-    print(f"Data bounds: ({xleft_snapped}, {yleft_snapped}) to ({xright_snapped}, {yright_snapped})")
-
-    # Add error handling
     try:
-        frame = data.sel(
-            longitude=slice(xleft_snapped, xright_snapped),
-            latitude=slice(yleft_snapped, yright_snapped)
+        # Convert tile coordinates to mercator
+        xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
+        xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
+
+        # Convert mercator coordinates back to lat/lon
+        xleft = xleft / 20037508.34 * 180
+        xright = xright / 20037508.34 * 180
+        yleft = math.degrees(2 * math.atan(math.exp(yleft / 20037508.34 * math.pi)) - math.pi/2)
+        yright = math.degrees(2 * math.atan(math.exp(yright / 20037508.34 * math.pi)) - math.pi/2)
+
+        print(f"Processing tile: zoom={zoom}, lon={longitude}, lat={latitude}")
+        print(f"Bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
+
+        # Get data for the tile
+        frame = data_array.sel(
+            longitude=slice(min(xleft, xright), max(xleft, xright)),
+            latitude=slice(max(yleft, yright), min(yleft, yright))
         )
-        
-        print(f"Frame shape: {frame.sizes}")
-        
-        if any(size == 0 for size in frame.sizes.values()):
-            print("Empty frame, returning empty tile")
+
+        if frame.size == 0:
+            print("No data in selected region")
             return create_empty_tile()
 
-        # Create canvas for rendering
-        csv = ds.Canvas(plot_width=256, plot_height=256,
-                       x_range=(xleft, xright),
-                       y_range=(yright, yleft))
+        # Create canvas and render data
+        canvas = ds.Canvas(plot_width=256, plot_height=256,
+                         x_range=(xleft, xright),
+                         y_range=(yright, yleft))
 
-        # Extract temperature data and handle NaN values
-        temp_data = frame['tmin'].fillna(np.nan)  # Use NaN instead of 0
+        # Convert data to DataFrame for datashader
+        df = frame.to_dataframe().reset_index()
         
-        # Create aggregation
-        agg = csv.quadmesh(temp_data,
-                          x='longitude',
+        # Check if we have valid data
+        if df.empty or df[temp_var].isna().all():
+            print("No valid temperature data in region")
+            return create_empty_tile()
+
+        # Create aggregation using points instead of quadmesh
+        agg = canvas.points(df, 
+                          x='longitude', 
                           y='latitude',
-                          agg=ds.mean('tmin'))
-        
-        if agg is None or agg.isnull().all().all():
-            print("No valid data in aggregation")
+                          agg=ds.mean(temp_var))
+
+        if agg is None:
+            print("Aggregation failed")
             return create_empty_tile()
 
-        # Create custom colormap
-        custom_cmap = create_colormap()
-        
-        # Apply shading with proper value range
-        img = tf.shade(agg,
-                      cmap=custom_cmap,
+        # Shade the data
+        img = tf.shade(agg, 
+                      cmap=create_colormap(),
                       span=[min_val, max_val],
                       how='linear')
-        
-        # Convert to RGBA array
+
+        # Convert to RGBA
         img_data = np.array(img.data)
         
-        # Create alpha channel: transparent where there's no data
-        alpha = np.where(np.isnan(agg.values), 0, 255)
+        # Create alpha channel
+        alpha = np.where(np.isnan(agg.values), 0, 255).astype(np.uint8)
         
-        # Create RGBA image
+        # Create final RGBA image
         rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
-        rgba[..., :3] = img_data[..., :3]  # Copy RGB channels
-        rgba[..., 3] = alpha  # Set alpha channel
-        
-        # Convert to PIL image with transparency
+        rgba[..., :3] = img_data[..., :3]
+        rgba[..., 3] = alpha
+
+        # Convert to PIL image
         pil_img = Image.fromarray(rgba, mode='RGBA')
         
         # Cache the result
@@ -226,6 +208,8 @@ def generateatile(zoom, longitude, latitude):
 
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return create_empty_tile()
 
 @app.route("/")
