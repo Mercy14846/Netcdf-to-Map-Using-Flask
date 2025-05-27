@@ -173,14 +173,18 @@ def generateatile(zoom, longitude, latitude):
             return create_empty_tile()
 
         # Create aggregation using points with dynamic spreading based on zoom
-        spread = max(1, 8 - zoom/2)  # Adjust spreading based on zoom level
         agg = canvas.points(df, 
                           x='longitude', 
                           y='latitude',
                           agg=ds.mean(temp_var))
         
+        # Calculate spread value - ensure it's a positive integer
+        spread = int(max(1, min(4, 10 - zoom)))  # Will give values between 1 and 4
+        print(f"Using spread value: {spread} for zoom level: {zoom}")
+        
         # Apply spreading to fill gaps
-        agg = ds.tf.spread(agg, px=spread)
+        if spread > 0:  # Only apply spread if it's positive
+            agg = ds.tf.spread(agg, px=spread)
 
         if agg is None:
             print("Aggregation failed")
