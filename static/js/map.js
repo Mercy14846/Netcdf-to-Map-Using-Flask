@@ -94,18 +94,38 @@ const legend = L.control({position: 'bottomright'});
 
 legend.onAdd = function (map) {
     const div = L.DomUtil.create('div', 'info legend');
-    const temps = [-40, -30, -20, -10, 0, 10, 20, 30, 40, 50];
     
-    div.innerHTML = '<div class="legend-title">Temperature (°C)</div>';
+    // Create a gradient background for the legend
+    const gradientHeight = 200;
+    const tempRange = [-40, 50];  // min to max temperature
     
-    for (let i = 0; i < temps.length; i++) {
-        const from = temps[i];
-        const to = temps[i + 1];
-        
-        div.innerHTML +=
-            '<i style="background:' + getColor(from + 1) + '"></i> ' +
-            from + (to ? '&ndash;' + to : '+') + '<br>';
-    }
+    div.innerHTML = `
+        <div class="legend-title">Temperature (°C)</div>
+        <div class="gradient-box" style="
+            height: ${gradientHeight}px;
+            background: linear-gradient(
+                to bottom,
+                #cc1414,  /* Very hot */
+                #ff4333,  /* Hot */
+                #ff9d35,  /* Warm */
+                #ffed3d,  /* Mild */
+                #7dfa80,  /* Cool */
+                #48f5f7,  /* Cold */
+                #2681f2,  /* Very cold */
+                #91009b   /* Extremely cold */
+            );
+            width: 30px;
+            margin-right: 10px;
+            float: left;
+        "></div>
+        <div class="gradient-labels" style="margin-left: 40px;">
+            <div style="height: ${gradientHeight}px; position: relative;">
+                <span style="position: absolute; top: 0;">${tempRange[1]}°C</span>
+                <span style="position: absolute; top: 50%;">5°C</span>
+                <span style="position: absolute; bottom: 0;">${tempRange[0]}°C</span>
+            </div>
+        </div>
+    `;
 
     return div;
 };
@@ -190,27 +210,56 @@ temperatureLayer.on('loading', showLoading);
 temperatureLayer.on('load', hideLoading);
 temperatureLayer.on('tileerror', hideLoading);
 
-// Function to get color based on temperature
+// Function to get color based on temperature using gradient interpolation
 function getColor(temp) {
-    // Enhanced temperature color scale
-    if (temp <= -40) return '#68001a';
-    if (temp <= -35) return '#7a0024';
-    if (temp <= -30) return '#8c002e';
-    if (temp <= -25) return '#9e0038';
-    if (temp <= -20) return '#b00042';
-    if (temp <= -15) return '#c2004c';
-    if (temp <= -10) return '#d40056';
-    if (temp <= -5) return '#e60060';
-    if (temp <= 0) return '#ff206e';
-    if (temp <= 5) return '#ff4081';
-    if (temp <= 10) return '#ff6094';
-    if (temp <= 15) return '#ff80a7';
-    if (temp <= 20) return '#ffa0ba';
-    if (temp <= 25) return '#ffc0cd';
-    if (temp <= 30) return '#ffe0e0';
-    if (temp <= 35) return '#ffffff';
-    if (temp <= 40) return '#e6ffff';
-    if (temp <= 45) return '#ccffff';
-    if (temp <= 50) return '#99ffff';
-    return '#80ffff';
+    // Define color stops for the gradient
+    const colorStops = [
+        { temp: -40, color: '#91009b' },  // Extremely cold
+        { temp: -30, color: '#2681f2' },  // Very cold
+        { temp: -20, color: '#48f5f7' },  // Cold
+        { temp: -10, color: '#7dfa80' },  // Cool
+        { temp: 0, color: '#ffed3d' },    // Mild
+        { temp: 20, color: '#ff9d35' },   // Warm
+        { temp: 35, color: '#ff4333' },   // Hot
+        { temp: 50, color: '#cc1414' }    // Very hot
+    ];
+
+    // Find the color stops between which the temperature falls
+    for (let i = 0; i < colorStops.length - 1; i++) {
+        if (temp <= colorStops[i + 1].temp) {
+            const t = (temp - colorStops[i].temp) / (colorStops[i + 1].temp - colorStops[i].temp);
+            return interpolateColor(colorStops[i].color, colorStops[i + 1].color, t);
+        }
+    }
+    return colorStops[colorStops.length - 1].color;
+}
+
+// Helper function to interpolate between two colors
+function interpolateColor(color1, color2, t) {
+    // Convert hex to RGB
+    const rgb1 = hexToRgb(color1);
+    const rgb2 = hexToRgb(color2);
+    
+    // Interpolate each component
+    const r = Math.round(rgb1.r + (rgb2.r - rgb1.r) * t);
+    const g = Math.round(rgb1.g + (rgb2.g - rgb1.g) * t);
+    const b = Math.round(rgb1.b + (rgb2.b - rgb1.b) * t);
+    
+    // Convert back to hex
+    return rgbToHex(r, g, b);
+}
+
+// Helper function to convert hex to RGB
+function hexToRgb(hex) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+// Helper function to convert RGB to hex
+function rgbToHex(r, g, b) {
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
