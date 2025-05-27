@@ -158,7 +158,7 @@ map.on('click', async function(e) {
         const temp = data.data[data.data.length - 1].temperature.toFixed(1);
         const popupContent = `
             <div class="temperature-popup">
-                <img src="/static/img/temp-icon.png" class="weather-icon">
+                <img src="/static/img/temp-icon.svg" class="weather-icon" alt="Temperature">
                 <span class="temperature-value">${temp}°C</span>
                 <br>
                 Lat: ${lat}° N<br>
