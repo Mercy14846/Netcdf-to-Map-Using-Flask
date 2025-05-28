@@ -267,51 +267,34 @@ body {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 8px;
     box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+    padding: 5px;
 }
 
 .custom-popup .leaflet-popup-content {
-    margin: 15px;
+    margin: 8px;
     width: auto !important;
+    text-align: center;
 }
 
-.custom-popup .coordinates {
-    font-family: Arial, sans-serif;
-    margin-bottom: 15px;
+.custom-popup .temp-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 500;
 }
 
-.custom-popup .coordinates p {
-    margin: 5px 0;
-    font-size: 14px;
+.custom-popup .temp-icon {
+    font-size: 24px;
 }
 
-.custom-popup svg {
-    display: block;
-    margin: 0 auto;
+.custom-popup .temp-icon.cold {
+    color: #3498db;
 }
 
-.custom-popup .line {
-    fill: none;
-    stroke: #3498db;
-    stroke-width: 2px;
-}
-
-.custom-popup .axis path,
-.custom-popup .axis line {
-    stroke: #666;
-}
-
-.custom-popup .gridlines line {
-    stroke: #ddd;
-    stroke-opacity: 0.7;
-}
-
-.custom-popup .gridlines path {
-    stroke-width: 0;
-}
-
-.custom-popup .label {
-    font-size: 12px;
-    fill: #666;
+.custom-popup .temp-icon.hot {
+    color: #e74c3c;
 }
 
 .custom-popup .error-message {
@@ -330,7 +313,7 @@ body {
 }
 
 /* Marker styling */
-.custom-marker {
+.leaflet-marker-icon {
     border: 2px solid #3498db;
     border-radius: 50%;
     background-color: rgba(52, 152, 219, 0.2);
@@ -339,11 +322,14 @@ body {
 /* Responsive adjustments */
 @media (max-width: 500px) {
     .custom-popup {
-        max-width: 300px;
+        max-width: 200px;
     }
     
-    .custom-popup svg {
-        width: 100%;
-        height: auto;
+    .custom-popup .temp-display {
+        font-size: 16px;
+    }
+    
+    .custom-popup .temp-icon {
+        font-size: 20px;
     }
 } 
