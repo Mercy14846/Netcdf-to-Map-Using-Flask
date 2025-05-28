@@ -16,6 +16,8 @@ import matplotlib.colors as mcolors
 from datashader import transfer_functions as tf
 from datashader.utils import lnglat_to_meters
 import threading
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.serving import run_simple
 
 app = Flask(__name__)
 
@@ -83,15 +85,14 @@ def load_data():
         print(f"Error loading data: {str(e)}")
         raise
 
-# Load data in a background thread when the app starts
-threading.Thread(target=load_data).start()
-
-@app.before_first_request
-def initialize():
-    global data, time_data
-    # Wait for data to be loaded if it hasn't been already
-    if data is None or time_data is None:
+# Initialize data at startup
+def create_app():
+    with app.app_context():
         load_data()
+    return app
+
+# Ensure data is loaded before first request
+app.wsgi_app = DispatcherMiddleware(create_app())
 
 # https://github.com/ScottSyms/tileshade/
 def tile2mercator(longitudetile, latitudetile, zoom):
@@ -437,4 +438,4 @@ def get_heatmap_data():
         return {'error': str(e)}
 
 if __name__ == '__main__':
-   app.run(debug=True)
+    run_simple('localhost', 5000, app, use_reloader=True, use_debugger=True)
