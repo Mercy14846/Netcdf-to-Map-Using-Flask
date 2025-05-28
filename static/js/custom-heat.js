@@ -17,14 +17,20 @@ L.HeatLayer = L.Layer.extend({
 
     setOptions: function (options) {
         L.setOptions(this, options);
-        if (this._heat) {
+        if (this._canvas) {
             this._updateOptions();
         }
         return this.redraw();
     },
 
+    _updateOptions: function() {
+        if (this.options.opacity !== undefined) {
+            this._canvas.style.opacity = this.options.opacity;
+        }
+    },
+
     redraw: function () {
-        if (this._heat && !this._frame && this._map && !this._map._animating) {
+        if (!this._frame && this._map && !this._map._animating) {
             this._frame = L.Util.requestAnimFrame(this._redraw, this);
         }
         return this;
@@ -80,6 +86,10 @@ L.HeatLayer = L.Layer.extend({
 
         const animated = this._map.options.zoomAnimation && L.Browser.any3d;
         L.DomUtil.addClass(canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+
+        if (this.options.opacity !== undefined) {
+            canvas.style.opacity = this.options.opacity;
+        }
     },
 
     _reset: function () {
@@ -110,7 +120,7 @@ L.HeatLayer = L.Layer.extend({
             L.point([-r, -r]),
             size.add([r, r]));
 
-        this._canvas.style.visibility = 'hidden';
+        // Clear canvas
         this._ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
 
         // Convert lat/lng points to pixels and add to data array
@@ -133,19 +143,18 @@ L.HeatLayer = L.Layer.extend({
 
         // Draw heatmap points
         this._ctx.globalAlpha = this.options.minOpacity || 0.05;
-        this._ctx.beginPath();
 
         for (let i = 0, len = data.length; i < len; i++) {
             const p = data[i];
             const intensity = Math.min(1, Math.max(p[2], 0));
             
+            this._ctx.beginPath();
             this._ctx.fillStyle = gradient;
             this._ctx.arc(p[0], p[1], this.options.radius || 25, 0, Math.PI * 2, false);
             this._ctx.fill();
         }
 
         this._frame = null;
-        this._canvas.style.visibility = 'visible';
     },
 
     _animateZoom: function (e) {

@@ -125,14 +125,45 @@ function hideLoading() {
     document.getElementById('loading-overlay').style.display = 'none';
 }
 
+// Error handling function
+function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+    
+    // Clear the chart
+    if (window.annotations) {
+        window.annotations.selectAll("*").remove();
+    }
+    if (window.chartArea) {
+        window.chartArea.selectAll("*").remove();
+    }
+    if (window.svg) {
+        window.svg.selectAll(".label").remove();
+    }
+    
+    // Clear temperature display
+    document.getElementById('temp-update').textContent = '--';
+}
+
+function clearError() {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+}
+
 // Fetch heatmap data and initialize the layer
 showLoading();
 fetch('/api/heatmap-data')
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
     .then(data => {
         if (data.error) {
-            console.error('Error:', data.error);
-            return;
+            throw new Error(data.error);
         }
 
         // Calculate optimal radius based on data resolution
@@ -179,6 +210,7 @@ fetch('/api/heatmap-data')
     })
     .catch(error => {
         console.error('Error loading heatmap data:', error);
+        showError('Failed to load temperature data. Please try refreshing the page.');
     })
     .finally(() => {
         hideLoading();
@@ -256,8 +288,15 @@ L.control.zoom({position: 'bottomleft'}).addTo(map);
 
 // Enhanced click handling for temperature data
 map.on('click', async function(e) {
+    clearError();
     const lat = e.latlng.lat.toFixed(4);
     const lng = e.latlng.lng.toFixed(4);
+    
+    // Update coordinates display
+    document.getElementById('lat-update').textContent = 
+        (Math.abs(e.latlng.lat).toFixed(2)) + "°" + (e.latlng.lat >= 0 ? 'N' : 'S');
+    document.getElementById('lon-update').textContent = 
+        (Math.abs(e.latlng.lng).toFixed(2)) + "°" + (e.latlng.lng >= 0 ? 'E' : 'W');
     
     // Show loading state
     document.getElementById('temp-update').textContent = 'Loading...';
@@ -274,6 +313,10 @@ map.on('click', async function(e) {
                 longitude: lng
             })
         });
+        
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
         
         const data = await response.json();
         
