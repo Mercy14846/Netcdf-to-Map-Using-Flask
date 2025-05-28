@@ -325,6 +325,34 @@ def heatmap_data():
         print(f"Error generating heatmap data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/data-extent')
+def get_data_extent():
+    """Return the geographical and temporal extent of available data"""
+    try:
+        # Get the bounds of the data
+        lat_bounds = {
+            'min': float(lat_array.min()),
+            'max': float(lat_array.max())
+        }
+        lon_bounds = {
+            'min': float(lon_array.min()),
+            'max': float(lon_array.max())
+        }
+
+        return jsonify({
+            'bounds': {
+                'lat': lat_bounds,
+                'lon': lon_bounds
+            },
+            'temporal': {
+                'start': 1840,  # For now, hardcoded temporal range
+                'end': 2024
+            }
+        })
+    except Exception as e:
+        print(f"Error getting data extent: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/time-series', methods=['POST'])
 @cache.memoize(timeout=7200)
 def time_series():
@@ -335,30 +363,29 @@ def time_series():
             
         latitude = float(request_data.get('latitude'))
         longitude = float(request_data.get('longitude'))
+        year = int(request_data.get('year', 2024))  # Default to 2024 if not specified
         
-        # Get time series data efficiently
+        # Validate coordinates are within bounds
+        if (latitude < lat_array.min() or latitude > lat_array.max() or
+            longitude < lon_array.min() or longitude > lon_array.max()):
+            return jsonify(error="Coordinates out of bounds"), 400
+
+        # For now, just return the current temperature for the requested year
+        # This will be updated when we have the full temporal dataset
         ts_slice = time_data_var.sel(
             longitude=longitude,
             latitude=latitude,
             method="nearest"
-        ).compute()  # Force computation to prevent recursion
+        ).compute()
+
+        # Simulate historical data for now
+        # This will be replaced with actual data when available
+        data = [{
+            'year': year,
+            'temperature': float(ts_slice)
+        }]
         
-        time_values = pd.to_datetime(time_data.time.values)
-        years = time_values.year.tolist() if hasattr(time_values.year, '__iter__') else [time_values.year]
-        
-        # Convert to numpy array for efficient processing
-        temp_values = np.array(ts_slice.values)
-        if temp_values.ndim == 0:
-            temp_values = np.array([float(temp_values)])
-        
-        # Create data list efficiently
-        data_list = [
-            {'year': int(year), 'temperature': float(temp)}
-            for year, temp in zip(years, temp_values)
-            if not np.isnan(temp)
-        ]
-        
-        return jsonify({'data': data_list})
+        return jsonify({'data': data})
             
     except Exception as e:
         print(f"Error in time series endpoint: {str(e)}")
