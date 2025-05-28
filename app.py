@@ -377,6 +377,10 @@ def get_heatmap_data():
         lons = data['longitude'].values
         temps = data_array.values
 
+        # Create temperature segments for better visualization
+        # Calculate temperature segments using percentiles for better distribution
+        temp_range = np.linspace(min_val, max_val, 10)  # 10 segments
+        
         # Create a regular grid of data
         grid_data = []
         lat_step = abs(lats[1] - lats[0])
@@ -405,10 +409,20 @@ def get_heatmap_data():
                         normalized_temp  # Use normalized temperature for intensity
                     ])
 
+        # Create segments for the legend
+        segments = []
+        for i in range(len(temp_range) - 1):
+            segments.append({
+                'start': float(temp_range[i]),
+                'end': float(temp_range[i + 1]),
+                'color': None  # Will be set by the frontend
+            })
+
         return jsonify({
             'data': grid_data,
             'min': float(min_val),
             'max': float(max_val),
+            'segments': segments,
             'bounds': {
                 'lat': [float(lats.min()), float(lats.max())],
                 'lon': [float(lons.min()), float(lons.max())]
