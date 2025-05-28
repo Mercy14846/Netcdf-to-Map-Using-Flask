@@ -1,8 +1,10 @@
 // Initialize the map with better default view
 const map = L.map('map', {
-    center: [6.1511677, 31.1710389],
-    zoom: 4,
-    zoomControl: false
+    center: [20, 0],  // Center map at equator
+    zoom: 3,         // Default zoom level similar to OpenWeatherMap
+    zoomControl: false,
+    minZoom: 2,      // Restrict minimum zoom
+    maxZoom: 18      // Maximum zoom level
 });
 
 // Add multiple base layers
@@ -20,6 +22,93 @@ osmLayer.addTo(map);
 
 // Create temperature layer with improved options
 let heatmapLayer = null;
+let legendControl = null;
+
+// Create layer controls in OpenWeatherMap style
+const layerControl = L.control({position: 'topleft'});
+layerControl.onAdd = function (map) {
+    const div = L.DomUtil.create('div', 'layer-control');
+    div.innerHTML = `
+        <div class="layer-button">
+            <button id="toggleTemp" class="control-button">
+                <i class="fas fa-temperature-high"></i> Temperature
+            </button>
+        </div>
+    `;
+    return div;
+};
+layerControl.addTo(map);
+
+// Create legend control
+function createLegend(min, max) {
+    if (legendControl) {
+        map.removeControl(legendControl);
+    }
+
+    legendControl = L.control({position: 'bottomright'});
+    legendControl.onAdd = function (map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        const grades = [
+            min,
+            min + (max - min) * 0.125,
+            min + (max - min) * 0.25,
+            min + (max - min) * 0.375,
+            min + (max - min) * 0.5,
+            min + (max - min) * 0.625,
+            min + (max - min) * 0.75,
+            min + (max - min) * 0.875,
+            max
+        ];
+
+        div.innerHTML = '<div class="legend-title">Temperature (°C)</div>';
+        div.innerHTML += '<div class="legend-container">';
+        
+        // Create gradient bar
+        div.innerHTML += '<div class="gradient-bar">';
+        for (let i = 0; i < grades.length - 1; i++) {
+            const startColor = getColorForTemp((grades[i] - min) / (max - min));
+            const endColor = getColorForTemp((grades[i + 1] - min) / (max - min));
+            div.innerHTML += `
+                <div class="gradient-segment" style="background: linear-gradient(to right, ${startColor}, ${endColor});">
+                    <span class="temp-label">${Math.round(grades[i])}°</span>
+                </div>
+            `;
+        }
+        div.innerHTML += `<span class="temp-label">${Math.round(max)}°</span>`;
+        div.innerHTML += '</div>';
+        div.innerHTML += '</div>';
+        
+        return div;
+    };
+    legendControl.addTo(map);
+}
+
+// Helper function to get color for temperature
+function getColorForTemp(normalizedTemp) {
+    const colors = {
+        0.0: '#0000FF',  // Bright Blue (Very cold)
+        0.1: '#00FFFF',  // Cyan
+        0.2: '#00FF90',  // Bright Turquoise
+        0.3: '#00FF00',  // Bright Green
+        0.4: '#80FF00',  // Lime Green
+        0.5: '#FFFF00',  // Bright Yellow
+        0.6: '#FFC000',  // Bright Orange
+        0.7: '#FF8000',  // Dark Orange
+        0.8: '#FF4000',  // Light Red
+        0.9: '#FF0000',  // Pure Red
+        1.0: '#800080'   // Purple
+    };
+
+    // Find the appropriate color stops
+    const stops = Object.keys(colors).map(Number);
+    for (let i = 0; i < stops.length - 1; i++) {
+        if (normalizedTemp <= stops[i + 1]) {
+            const t = (normalizedTemp - stops[i]) / (stops[i + 1] - stops[i]);
+            return interpolateColor(colors[stops[i]], colors[stops[i + 1]], t);
+        }
+    }
+    return colors[1.0];
+}
 
 // Fetch heatmap data and initialize the layer
 fetch('/api/heatmap-data')
@@ -30,21 +119,13 @@ fetch('/api/heatmap-data')
             return;
         }
 
-        // Set map bounds based on data extent
-        if (data.bounds) {
-            map.fitBounds([
-                [data.bounds.lat[0], data.bounds.lon[0]],
-                [data.bounds.lat[1], data.bounds.lon[1]]
-            ]);
-        }
-
         // Create heatmap layer with custom configuration
         heatmapLayer = L.heatLayer(data.data, {
-            radius: 15,          // Smaller radius for more precise grid representation
-            blur: 10,           // Less blur for sharper grid cells
-            maxZoom: 12,        // Increase max zoom for better detail
+            radius: 12,          // Smaller radius for more precise grid representation
+            blur: 8,            // Less blur for sharper grid cells
+            maxZoom: 18,        // Increase max zoom for better detail
             max: data.max,
-            minOpacity: 0.6,    // Minimum opacity to ensure the heatmap is visible
+            minOpacity: 0.5,    // Minimum opacity to ensure the heatmap is visible
             gradient: {
                 0.0: '#0000FF',  // Bright Blue (Very cold)
                 0.1: '#00FFFF',  // Cyan
@@ -58,21 +139,31 @@ fetch('/api/heatmap-data')
                 0.9: '#FF0000',  // Pure Red
                 1.0: '#800080'   // Purple
             }
-        }).addTo(map);
+        });
 
-        // Add loading indicator
-        const loadingControl = L.control({position: 'topright'});
-        loadingControl.onAdd = function (map) {
-            const div = L.DomUtil.create('div', 'loading-control');
-            div.innerHTML = 'Loading temperature data...';
-            return div;
-        };
-        loadingControl.addTo(map);
+        // Add the layer to the map
+        heatmapLayer.addTo(map);
 
-        // Remove loading indicator once heatmap is ready
-        setTimeout(() => {
-            map.removeControl(loadingControl);
-        }, 1000);
+        // Create legend
+        createLegend(data.min, data.max);
+
+        // Set up toggle button
+        const toggleButton = document.getElementById('toggleTemp');
+        let isVisible = true;
+
+        toggleButton.addEventListener('click', () => {
+            if (isVisible) {
+                map.removeLayer(heatmapLayer);
+                toggleButton.classList.remove('active');
+            } else {
+                heatmapLayer.addTo(map);
+                toggleButton.classList.add('active');
+            }
+            isVisible = !isVisible;
+        });
+
+        // Initially activate the button
+        toggleButton.classList.add('active');
     })
     .catch(error => {
         console.error('Error loading heatmap data:', error);
@@ -141,55 +232,6 @@ controlPanel.onAdd = function (map) {
 };
 
 controlPanel.addTo(map);
-
-// Add legend with improved styling
-const legend = L.control({position: 'bottomright'});
-
-legend.onAdd = function (map) {
-    const div = L.DomUtil.create('div', 'info legend');
-    
-    // Create a gradient background for the legend
-    const gradientHeight = 200;
-    const tempRange = [-40, 40];  // min to max temperature
-    
-    div.innerHTML = `
-        <div class="legend-title">Temperature (°C)</div>
-        <div class="gradient-box" style="
-            height: ${gradientHeight}px;
-            background: linear-gradient(
-                to bottom,
-                #800080,  /* Purple (Hottest) */
-                #FF00FF,  /* Magenta */
-                #FF0080,  /* Bright Pink */
-                #FF0040,  /* Red-Pink */
-                #FF0000,  /* Pure Red */
-                #FF4000,  /* Light Red */
-                #FF8000,  /* Dark Orange */
-                #FFC000,  /* Bright Orange */
-                #FFFF00,  /* Bright Yellow */
-                #80FF00,  /* Lime Green */
-                #00FF00,  /* Bright Green */
-                #00FF90,  /* Bright Turquoise */
-                #00FFFF,  /* Cyan */
-                #0000FF   /* Bright Blue (Coldest) */
-            );
-            width: 30px;
-            margin-right: 10px;
-            float: left;
-        "></div>
-        <div class="gradient-labels" style="margin-left: 40px;">
-            <div style="height: ${gradientHeight}px; position: relative;">
-                <span style="position: absolute; top: 0;">${tempRange[1]}°C</span>
-                <span style="position: absolute; top: 50%;">0°C</span>
-                <span style="position: absolute; bottom: 0;">${tempRange[0]}°C</span>
-            </div>
-        </div>
-    `;
-
-    return div;
-};
-
-legend.addTo(map);
 
 // Add scale control in bottom left
 L.control.scale({position: 'bottomleft'}).addTo(map);
