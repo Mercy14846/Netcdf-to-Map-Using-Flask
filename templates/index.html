@@ -17,9 +17,6 @@
     <!-- Leaflet JavaScript -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     
-    <!-- Leaflet.heat plugin -->
-    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
-    
     <!-- Chart.js for graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -56,6 +53,7 @@
     </div>
 
     <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/custom-heat.js') }}"></script>
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
     <script>
         const svg = d3.select("svg#time-series-chart");
