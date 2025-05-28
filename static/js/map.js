@@ -132,13 +132,10 @@ fetch('/api/heatmap-data')
         const baseRadius = Math.max(5, Math.ceil(1 / avgRes));
 
         // Create heatmap layer with custom configuration
-        heatmapLayer = L.heatLayer(data.data, {
+        heatmapLayer = new L.HeatLayer(data.data, {
             radius: baseRadius,
-            blur: baseRadius * 1.5,
-            maxZoom: 18,
             minOpacity: 0.35,
             gradient: colorGradient,
-            renderer: new CanvasLayer()  // Use our custom canvas renderer
         }).addTo(map);
 
         // Set map bounds based on data extent with some padding
