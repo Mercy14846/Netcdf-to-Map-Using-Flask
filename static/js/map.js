@@ -39,6 +39,14 @@ layerControl.onAdd = function (map) {
 };
 layerControl.addTo(map);
 
+// Extend L.Canvas to set willReadFrequently
+const CanvasLayer = L.Canvas.extend({
+    _initContainer: function() {
+        L.Canvas.prototype._initContainer.call(this);
+        this._ctx.canvas.setAttribute('willReadFrequently', 'true');
+    }
+});
+
 // Create legend control
 function createLegend(min, max) {
     if (legendControl) {
@@ -119,13 +127,18 @@ fetch('/api/heatmap-data')
             return;
         }
 
+        // Calculate optimal radius based on data resolution
+        const latRes = data.resolution.lat;
+        const lonRes = data.resolution.lon;
+        const avgRes = (latRes + lonRes) / 2;
+        const baseRadius = Math.max(5, Math.ceil(1 / avgRes));
+
         // Create heatmap layer with custom configuration
         heatmapLayer = L.heatLayer(data.data, {
-            radius: 15,          // Slightly larger radius for smoother appearance
-            blur: 20,           // Increased blur for more OpenWeatherMap-like smoothness
-            maxZoom: 18,        // Keep max zoom
-            max: data.max,
-            minOpacity: 0.35,   // Lower minimum opacity for better contrast
+            radius: baseRadius,
+            blur: baseRadius * 1.5,
+            maxZoom: 18,
+            minOpacity: 0.35,
             gradient: {
                 0.0: '#91003f',  // Deep purple (Very cold)
                 0.2: '#7f1f7f',  // Purple
@@ -137,8 +150,17 @@ fetch('/api/heatmap-data')
                 0.8: '#8fef73',  // Light green
                 0.9: '#efef45',  // Yellow
                 1.0: '#ef4524'   // Red (Very hot)
-            }
+            },
+            renderer: new CanvasLayer()  // Use our custom canvas renderer
         }).addTo(map);
+
+        // Set map bounds based on data extent with some padding
+        const latPad = (data.bounds.lat[1] - data.bounds.lat[0]) * 0.1;
+        const lonPad = (data.bounds.lon[1] - data.bounds.lon[0]) * 0.1;
+        map.fitBounds([
+            [data.bounds.lat[0] - latPad, data.bounds.lon[0] - lonPad],
+            [data.bounds.lat[1] + latPad, data.bounds.lon[1] + lonPad]
+        ]);
 
         // Create legend
         createLegend(data.min, data.max);
