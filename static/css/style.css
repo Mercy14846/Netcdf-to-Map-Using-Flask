@@ -33,56 +33,64 @@ body {
 /* Layer control styles */
 .layer-control {
     background: white;
-    padding: 10px;
+    padding: 8px;
     border-radius: 4px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    margin: 10px;
 }
 
 .layer-button {
-    margin: 5px 0;
+    margin: 0;
 }
 
 .control-button {
     background: white;
-    border: 1px solid #ccc;
-    padding: 8px 15px;
-    border-radius: 4px;
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    border-radius: 3px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    transition: all 0.3s ease;
+    gap: 6px;
+    transition: all 0.2s ease;
+    font-weight: 500;
+    color: #444;
+    min-width: 120px;
 }
 
 .control-button:hover {
-    background: #f4f4f4;
+    background: #f8f8f8;
+    border-color: #ccc;
 }
 
 .control-button.active {
-    background: #4a90e2;
+    background: #1a73e8;
     color: white;
-    border-color: #357abd;
+    border-color: #1557b0;
 }
 
 .control-button i {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 /* Legend styles */
 .legend {
     background: white;
-    padding: 15px;
+    padding: 12px 15px;
     border-radius: 4px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    min-width: 200px;
+    min-width: 250px;
+    max-width: 300px;
+    margin: 10px;
 }
 
 .legend-title {
-    font-weight: bold;
-    margin-bottom: 10px;
-    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    font-size: 13px;
     color: #333;
+    text-transform: uppercase;
 }
 
 .legend-container {
@@ -91,12 +99,13 @@ body {
 }
 
 .gradient-bar {
-    height: 15px;
+    height: 8px;
     display: flex;
-    margin: 10px 0;
+    margin: 8px 0 25px 0;
     border-radius: 2px;
     overflow: hidden;
     position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .gradient-segment {
@@ -108,9 +117,10 @@ body {
     position: absolute;
     bottom: -20px;
     left: 0;
-    font-size: 12px;
+    font-size: 11px;
     color: #666;
     transform: translateX(-50%);
+    font-weight: 500;
 }
 
 .gradient-segment:last-child .temp-label {
@@ -150,16 +160,24 @@ body {
 /* Responsive styles */
 @media (max-width: 768px) {
     .legend {
-        max-width: calc(100vw - 40px);
+        max-width: calc(100vw - 20px);
+        margin: 5px;
+        padding: 10px;
     }
     
     .control-button {
-        padding: 6px 12px;
-        font-size: 13px;
+        padding: 6px 10px;
+        font-size: 12px;
+        min-width: 100px;
     }
     
     .temp-label {
-        font-size: 11px;
+        font-size: 10px;
+    }
+    
+    .gradient-bar {
+        height: 6px;
+        margin: 6px 0 20px 0;
     }
 }
 

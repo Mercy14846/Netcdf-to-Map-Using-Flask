@@ -121,28 +121,24 @@ fetch('/api/heatmap-data')
 
         // Create heatmap layer with custom configuration
         heatmapLayer = L.heatLayer(data.data, {
-            radius: 12,          // Smaller radius for more precise grid representation
-            blur: 8,            // Less blur for sharper grid cells
-            maxZoom: 18,        // Increase max zoom for better detail
+            radius: 15,          // Slightly larger radius for smoother appearance
+            blur: 20,           // Increased blur for more OpenWeatherMap-like smoothness
+            maxZoom: 18,        // Keep max zoom
             max: data.max,
-            minOpacity: 0.5,    // Minimum opacity to ensure the heatmap is visible
+            minOpacity: 0.35,   // Lower minimum opacity for better contrast
             gradient: {
-                0.0: '#0000FF',  // Bright Blue (Very cold)
-                0.1: '#00FFFF',  // Cyan
-                0.2: '#00FF90',  // Bright Turquoise
-                0.3: '#00FF00',  // Bright Green
-                0.4: '#80FF00',  // Lime Green
-                0.5: '#FFFF00',  // Bright Yellow
-                0.6: '#FFC000',  // Bright Orange
-                0.7: '#FF8000',  // Dark Orange
-                0.8: '#FF4000',  // Light Red
-                0.9: '#FF0000',  // Pure Red
-                1.0: '#800080'   // Purple
+                0.0: '#91003f',  // Deep purple (Very cold)
+                0.2: '#7f1f7f',  // Purple
+                0.3: '#4c2c9b',  // Blue-purple
+                0.4: '#1f3b9b',  // Dark blue
+                0.5: '#2f7eb6',  // Medium blue
+                0.6: '#40b6e5',  // Light blue
+                0.7: '#6be5bf',  // Turquoise
+                0.8: '#8fef73',  // Light green
+                0.9: '#efef45',  // Yellow
+                1.0: '#ef4524'   // Red (Very hot)
             }
-        });
-
-        // Add the layer to the map
-        heatmapLayer.addTo(map);
+        }).addTo(map);
 
         // Create legend
         createLegend(data.min, data.max);
