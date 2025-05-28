@@ -372,20 +372,30 @@ WEATHER_PARAMS = {
 @app.route('/api/heatmap-data')
 def get_heatmap_data():
     try:
-        # Convert the data array to a pandas DataFrame
-        df = data_array.to_dataframe().reset_index()
-        
-        # Create list of [lat, lon, temp] points for the heatmap
-        heatmap_data = df[[temp_var, 'latitude', 'longitude']].dropna().values.tolist()
-        
-        # Convert the data to the format expected by Leaflet.heat
-        # [lat, lng, intensity]
-        formatted_data = [[float(row[1]), float(row[2]), float(row[0])] for row in heatmap_data]
+        # Get the raw grid data
+        lats = data['latitude'].values
+        lons = data['longitude'].values
+        temps = data_array.values
+
+        # Create a list of [lat, lon, temp] for each grid point
+        heatmap_data = []
+        for i in range(len(lats)):
+            for j in range(len(lons)):
+                if not np.isnan(temps[i, j]):  # Only include non-NaN values
+                    heatmap_data.append([
+                        float(lats[i]),
+                        float(lons[j]),
+                        float(temps[i, j])
+                    ])
         
         return jsonify({
-            'data': formatted_data,
+            'data': heatmap_data,
             'min': min_val,
-            'max': max_val
+            'max': max_val,
+            'bounds': {
+                'lat': [float(lats.min()), float(lats.max())],
+                'lon': [float(lons.min()), float(lons.max())]
+            }
         })
     except Exception as e:
         print(f"Error generating heatmap data: {str(e)}")
