@@ -19,19 +19,41 @@ const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/
 osmLayer.addTo(map);
 
 // Create temperature layer with improved options
-const temperatureLayer = L.tileLayer('/tiles/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    minZoom: 3,
-    opacity: 0.85,
-    tileSize: 256,
-    zIndex: 1,
-    updateWhenIdle: false,
-    updateWhenZooming: true,
-    keepBuffer: 2
-});
+let heatmapLayer = null;
 
-// Add layers to map
-temperatureLayer.addTo(map);
+// Fetch heatmap data and initialize the layer
+fetch('/api/heatmap-data')
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error('Error:', data.error);
+            return;
+        }
+
+        // Create heatmap layer with custom configuration
+        heatmapLayer = L.heatLayer(data.data, {
+            radius: 25,
+            blur: 15,
+            maxZoom: 10,
+            max: data.max,
+            gradient: {
+                0.0: '#0000FF',  // Bright Blue (Very cold)
+                0.1: '#00FFFF',  // Cyan
+                0.2: '#00FF90',  // Bright Turquoise
+                0.3: '#00FF00',  // Bright Green
+                0.4: '#80FF00',  // Lime Green
+                0.5: '#FFFF00',  // Bright Yellow
+                0.6: '#FFC000',  // Bright Orange
+                0.7: '#FF8000',  // Dark Orange
+                0.8: '#FF4000',  // Light Red
+                0.9: '#FF0000',  // Pure Red
+                1.0: '#800080'   // Purple
+            }
+        }).addTo(map);
+    })
+    .catch(error => {
+        console.error('Error loading heatmap data:', error);
+    });
 
 // Create layer control panel
 const controlPanel = L.control({position: 'topright'});
@@ -78,15 +100,17 @@ controlPanel.onAdd = function (map) {
         });
 
         tempCheckbox.addEventListener('change', () => {
-            if (tempCheckbox.checked) {
-                temperatureLayer.addTo(map);
-            } else {
-                map.removeLayer(temperatureLayer);
+            if (tempCheckbox.checked && heatmapLayer) {
+                heatmapLayer.addTo(map);
+            } else if (heatmapLayer) {
+                map.removeLayer(heatmapLayer);
             }
         });
 
         opacitySlider.addEventListener('input', (e) => {
-            temperatureLayer.setOpacity(e.target.value);
+            if (heatmapLayer) {
+                heatmapLayer.setOptions({ opacity: e.target.value });
+            }
         });
     }, 0);
 
@@ -218,9 +242,9 @@ function hideLoading() {
 }
 
 // Add loading events
-temperatureLayer.on('loading', showLoading);
-temperatureLayer.on('load', hideLoading);
-temperatureLayer.on('tileerror', hideLoading);
+heatmapLayer.on('loading', showLoading);
+heatmapLayer.on('load', hideLoading);
+heatmapLayer.on('tileerror', hideLoading);
 
 // Function to get color based on temperature using gradient interpolation
 function getColor(temp) {
