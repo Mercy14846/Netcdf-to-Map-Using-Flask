@@ -30,53 +30,137 @@ body {
     font-size: 16px;
 }
 
-/* Layer controls */
+/* Layer control styles */
 .layer-control {
-    margin-bottom: 15px;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
 }
 
-.layer-item {
-    display: flex;
-    align-items: center;
+.layer-button {
     margin: 5px 0;
 }
 
-.layer-item label {
-    margin-left: 8px;
-    color: #555;
+.control-button {
+    background: white;
+    border: 1px solid #ccc;
+    padding: 8px 15px;
+    border-radius: 4px;
+    cursor: pointer;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s ease;
+}
+
+.control-button:hover {
+    background: #f4f4f4;
+}
+
+.control-button.active {
+    background: #4a90e2;
+    color: white;
+    border-color: #357abd;
+}
+
+.control-button i {
+    font-size: 16px;
 }
 
 /* Legend styles */
-.info.legend {
-    background: rgba(255, 255, 255, 0.9);
+.legend {
+    background: white;
     padding: 15px;
     border-radius: 4px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    min-width: 100px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    min-width: 200px;
 }
 
 .legend-title {
     font-weight: bold;
     margin-bottom: 10px;
-    color: #333;
     font-size: 14px;
-}
-
-.gradient-box {
-    border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.gradient-labels {
-    font-size: 12px;
     color: #333;
 }
 
-.gradient-labels span {
-    transform: translateY(-50%);
-    right: 0;
-    white-space: nowrap;
+.legend-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.gradient-bar {
+    height: 15px;
+    display: flex;
+    margin: 10px 0;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.gradient-segment {
+    flex: 1;
+    position: relative;
+}
+
+.temp-label {
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    font-size: 12px;
+    color: #666;
+    transform: translateX(-50%);
+}
+
+.gradient-segment:last-child .temp-label {
+    left: 100%;
+}
+
+/* Info panel styles */
+.info-panel {
+    background: white;
+    padding: 15px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+}
+
+/* Scale control styles */
+.leaflet-control-scale {
+    margin-left: 15px;
+    margin-bottom: 15px;
+}
+
+/* Zoom control styles */
+.leaflet-control-zoom {
+    margin-left: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+}
+
+.leaflet-control-zoom a {
+    background: white;
+    color: #333;
+}
+
+.leaflet-control-zoom a:hover {
+    background: #f4f4f4;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .legend {
+        max-width: calc(100vw - 40px);
+    }
+    
+    .control-button {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
+    
+    .temp-label {
+        font-size: 11px;
+    }
 }
 
 /* Opacity control */
