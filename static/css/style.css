@@ -80,8 +80,8 @@ body {
     padding: 12px 15px;
     border-radius: 4px;
     box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    min-width: 250px;
-    max-width: 300px;
+    min-width: 280px;
+    max-width: 320px;
     margin: 10px;
 }
 
@@ -96,35 +96,31 @@ body {
 .legend-container {
     display: flex;
     flex-direction: column;
+    position: relative;
+    padding-bottom: 25px;
 }
 
 .gradient-bar {
-    height: 8px;
-    display: flex;
-    margin: 8px 0 25px 0;
+    height: 12px;
     border-radius: 2px;
-    overflow: hidden;
+    margin: 5px 0;
     position: relative;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-.gradient-segment {
-    flex: 1;
+.temp-labels {
     position: relative;
+    height: 20px;
+    margin-top: 5px;
 }
 
 .temp-label {
     position: absolute;
-    bottom: -20px;
-    left: 0;
+    transform: translateX(-50%);
     font-size: 11px;
     color: #666;
-    transform: translateX(-50%);
     font-weight: 500;
-}
-
-.gradient-segment:last-child .temp-label {
-    left: 100%;
+    white-space: nowrap;
 }
 
 /* Info panel styles */
@@ -160,24 +156,23 @@ body {
 /* Responsive styles */
 @media (max-width: 768px) {
     .legend {
+        min-width: 200px;
         max-width: calc(100vw - 20px);
         margin: 5px;
         padding: 10px;
     }
     
-    .control-button {
-        padding: 6px 10px;
-        font-size: 12px;
-        min-width: 100px;
+    .gradient-bar {
+        height: 8px;
     }
     
     .temp-label {
         font-size: 10px;
     }
     
-    .gradient-bar {
-        height: 6px;
-        margin: 6px 0 20px 0;
+    .legend-title {
+        font-size: 12px;
+        margin-bottom: 8px;
     }
 }
 
