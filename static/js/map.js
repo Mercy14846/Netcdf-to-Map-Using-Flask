@@ -30,12 +30,21 @@ fetch('/api/heatmap-data')
             return;
         }
 
+        // Set map bounds based on data extent
+        if (data.bounds) {
+            map.fitBounds([
+                [data.bounds.lat[0], data.bounds.lon[0]],
+                [data.bounds.lat[1], data.bounds.lon[1]]
+            ]);
+        }
+
         // Create heatmap layer with custom configuration
         heatmapLayer = L.heatLayer(data.data, {
-            radius: 25,
-            blur: 15,
-            maxZoom: 10,
+            radius: 15,          // Smaller radius for more precise grid representation
+            blur: 10,           // Less blur for sharper grid cells
+            maxZoom: 12,        // Increase max zoom for better detail
             max: data.max,
+            minOpacity: 0.6,    // Minimum opacity to ensure the heatmap is visible
             gradient: {
                 0.0: '#0000FF',  // Bright Blue (Very cold)
                 0.1: '#00FFFF',  // Cyan
@@ -50,6 +59,20 @@ fetch('/api/heatmap-data')
                 1.0: '#800080'   // Purple
             }
         }).addTo(map);
+
+        // Add loading indicator
+        const loadingControl = L.control({position: 'topright'});
+        loadingControl.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'loading-control');
+            div.innerHTML = 'Loading temperature data...';
+            return div;
+        };
+        loadingControl.addTo(map);
+
+        // Remove loading indicator once heatmap is ready
+        setTimeout(() => {
+            map.removeControl(loadingControl);
+        }, 1000);
     })
     .catch(error => {
         console.error('Error loading heatmap data:', error);
@@ -174,18 +197,6 @@ L.control.scale({position: 'bottomleft'}).addTo(map);
 // Add zoom control in bottom left
 L.control.zoom({position: 'bottomleft'}).addTo(map);
 
-// Improved loading indicator
-const loadingControl = L.control({position: 'topright'});
-
-loadingControl.onAdd = function (map) {
-    const div = L.DomUtil.create('div', 'loading-control');
-    div.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-    div.style.display = 'none';
-    return div;
-};
-
-loadingControl.addTo(map);
-
 // Enhanced click handling for temperature data
 map.on('click', async function(e) {
     const lat = e.latlng.lat.toFixed(4);
@@ -231,20 +242,6 @@ map.on('click', async function(e) {
         console.error('Error fetching temperature data:', error);
     }
 });
-
-// Show/hide loading indicator
-function showLoading() {
-    document.querySelector('.loading-control').style.display = 'block';
-}
-
-function hideLoading() {
-    document.querySelector('.loading-control').style.display = 'none';
-}
-
-// Add loading events
-heatmapLayer.on('loading', showLoading);
-heatmapLayer.on('load', hideLoading);
-heatmapLayer.on('tileerror', hideLoading);
 
 // Function to get color based on temperature using gradient interpolation
 function getColor(temp) {
