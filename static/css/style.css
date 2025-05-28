@@ -261,4 +261,89 @@ body {
     .time-slider {
         width: 200px;
     }
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+}
+
+.custom-popup .leaflet-popup-content {
+    margin: 15px;
+    width: auto !important;
+}
+
+.custom-popup .coordinates {
+    font-family: Arial, sans-serif;
+    margin-bottom: 15px;
+}
+
+.custom-popup .coordinates p {
+    margin: 5px 0;
+    font-size: 14px;
+}
+
+.custom-popup svg {
+    display: block;
+    margin: 0 auto;
+}
+
+.custom-popup .line {
+    fill: none;
+    stroke: #3498db;
+    stroke-width: 2px;
+}
+
+.custom-popup .axis path,
+.custom-popup .axis line {
+    stroke: #666;
+}
+
+.custom-popup .gridlines line {
+    stroke: #ddd;
+    stroke-opacity: 0.7;
+}
+
+.custom-popup .gridlines path {
+    stroke-width: 0;
+}
+
+.custom-popup .label {
+    font-size: 12px;
+    fill: #666;
+}
+
+.custom-popup .error-message {
+    color: #e74c3c;
+    background-color: rgba(231, 76, 60, 0.1);
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 10px;
+    font-size: 13px;
+}
+
+/* Loading state styling */
+.custom-popup .temp-update.loading {
+    color: #666;
+    font-style: italic;
+}
+
+/* Marker styling */
+.custom-marker {
+    border: 2px solid #3498db;
+    border-radius: 50%;
+    background-color: rgba(52, 152, 219, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 500px) {
+    .custom-popup {
+        max-width: 300px;
+    }
+    
+    .custom-popup svg {
+        width: 100%;
+        height: auto;
+    }
 } 
