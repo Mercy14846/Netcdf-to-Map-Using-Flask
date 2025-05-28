@@ -62,19 +62,29 @@
         }
 
         .custom-popup {
-            max-width: 450px;
-            max-height: 400px;
-            overflow: auto;
+            max-width: 200px;
+            text-align: center;
         }
 
-        .custom-popup .coordinates {
-            margin-bottom: 10px;
-            font-size: 14px;
+        .temp-display {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 18px;
+            padding: 10px;
         }
 
-        .custom-popup svg {
-            max-width: 100%;
-            height: auto;
+        .temp-icon {
+            font-size: 24px;
+        }
+
+        .temp-icon.cold {
+            color: #3498db;
+        }
+
+        .temp-icon.hot {
+            color: #e74c3c;
         }
         
         @keyframes spin {
@@ -93,13 +103,11 @@
 
     <!-- Popup template (hidden) -->
     <div id="popup-template" style="display: none;">
-        <div class="coordinates">
-            <p>Latitude: <span class="lat-update">--</span></p>
-            <p>Longitude: <span class="lon-update">--</span></p>
-            <p>Temperature: <span class="temp-update">--</span></p>
-            <div class="error-message"></div>
+        <div class="temp-display">
+            <i class="temp-icon fas"></i>
+            <span class="temp-update">--</span>
         </div>
-        <svg class="time-series-chart" width="400" height="300"></svg>
+        <div class="error-message"></div>
     </div>
 
     <!-- Custom JavaScript -->
@@ -117,17 +125,25 @@
             return content;
         }
 
+        function updateTempIcon(container, temperature) {
+            const icon = container.querySelector('.temp-icon');
+            icon.classList.remove('fa-thermometer-full', 'fa-thermometer-empty', 'hot', 'cold');
+            
+            if (temperature > 20) {
+                icon.classList.add('fa-thermometer-full', 'hot');
+            } else {
+                icon.classList.add('fa-thermometer-empty', 'cold');
+            }
+        }
+
         function showError(container, message) {
             const errorDiv = container.querySelector('.error-message');
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
             
-            // Clear the chart
-            const svg = d3.select(container.querySelector('svg'));
-            svg.selectAll("*").remove();
-            
             // Clear temperature display
             container.querySelector('.temp-update').textContent = '--';
+            updateTempIcon(container, 0); // Reset icon
         }
 
         function clearError(container) {
@@ -150,18 +166,12 @@
             // Create and setup popup content
             const popupContent = createPopupContent(clickedCoords);
             
-            // Update coordinates in popup
-            popupContent.querySelector('.lat-update').textContent = 
-                (Math.abs(clickedCoords.lat).toFixed(2)) + "°" + (clickedCoords.lat >= 0 ? 'N' : 'S');
-            popupContent.querySelector('.lon-update').textContent = 
-                (Math.abs(clickedCoords.lng).toFixed(2)) + "°" + (clickedCoords.lng >= 0 ? 'E' : 'W');
-            
             // Clear temperature display while loading
             popupContent.querySelector('.temp-update').textContent = 'Loading...';
             
             // Create and bind popup
             currentPopup = L.popup({
-                maxWidth: 500,
+                maxWidth: 200,
                 className: 'custom-popup'
             })
             .setLatLng(clickedCoords)
@@ -206,128 +216,26 @@
                 if (timeSeriesData.length > 0) {
                     const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
                     if (typeof latestTemp === 'number' && !isNaN(latestTemp)) {
-                        popupContent.querySelector('.temp-update').textContent = latestTemp.toFixed(2) + '°C';
+                        const tempText = latestTemp.toFixed(1) + '°C';
+                        popupContent.querySelector('.temp-update').textContent = tempText;
+                        updateTempIcon(popupContent, latestTemp);
                     } else {
                         popupContent.querySelector('.temp-update').textContent = 'N/A';
+                        updateTempIcon(popupContent, 0);
                     }
                 } else {
                     popupContent.querySelector('.temp-update').textContent = 'No data';
+                    updateTempIcon(popupContent, 0);
                 }
                 
-                plotData(timeSeriesData, clickedCoords, popupContent);
                 currentPopup.update();
             })
             .catch(error => {
                 console.error('Error:', error);
                 showError(popupContent, error.message);
-                popupContent.querySelector('.temp-update').textContent = '--';
                 currentPopup.update();
             });
         });
-
-        function plotData(data, clickedCoords, container) {
-            if (!Array.isArray(data) || data.length === 0) {
-                showError(container, 'No data available for this location');
-                return;
-            }
-
-            clearError(container);
-            const svg = d3.select(container.querySelector('svg'));
-            svg.selectAll("*").remove();
-
-            const width = +svg.attr("width");
-            const height = +svg.attr("height");
-            const margin = {top: 25, right: 15, bottom: 60, left: 70};
-            const chartWidth = width - margin.left - margin.right;
-            const chartHeight = height - margin.top - margin.bottom;
-
-            // ensure data is of type Number
-            data.forEach(d => {
-                d.year = Number(d.year);
-                d.temperature = Number(d.temperature);
-            });
-
-            // construct scales
-            const xDomain = d3.extent(data, d => d.year);
-            const yDomain = d3.extent(data, d => d.temperature);
-            const timeScale = d3.scaleLinear().domain(xDomain).range([0, chartWidth]);
-            const dataScale = d3.scaleLinear().domain(yDomain).range([chartHeight, 0]);
-
-            // create chart groups
-            const annotations = svg.append("g")
-                .attr("class", "annotations")
-                .attr("transform", `translate(0,0)`);
-            const chartArea = svg.append("g")
-                .attr("class", "points")
-                .attr("transform", `translate(${margin.left},${margin.top})`);
-
-            // construct axes
-            const leftAxis = d3.axisLeft(dataScale);
-            const leftGridlines = d3.axisLeft(dataScale)
-                .tickSize(-chartWidth-10)
-                .tickFormat("");
-
-            annotations.append("g")
-                .attr("class", "y axis")
-                .attr("transform", `translate(${margin.left-10},${margin.top})`)
-                .call(leftAxis);
-            annotations.append("g")
-                .attr("class", "y gridlines")
-                .attr("transform", `translate(${margin.left-10},${margin.top})`)
-                .call(leftGridlines);
-
-            const bottomAxis = d3.axisBottom(timeScale).tickFormat(d3.format("d"));
-            const bottomGridlines = d3.axisBottom(timeScale)
-                .tickSize(-chartHeight-10)
-                .tickFormat("");
-
-            annotations.append("g")
-                .attr("class", "x axis")
-                .attr("transform", `translate(${margin.left},${chartHeight + margin.top + 10})`)
-                .call(bottomAxis);
-            annotations.append("g")
-                .attr("class", "x gridlines")
-                .attr("transform", `translate(${margin.left},${chartHeight + margin.top + 10})`)
-                .call(bottomGridlines);
-
-            // add axis labels
-            svg.append("text")
-                .attr("class", "label")
-                .attr("transform", "rotate(-90)")
-                .attr("y", margin.left - 60)
-                .attr("x", -(height/2))
-                .attr("dy", "1em")
-                .style("text-anchor", "middle")
-                .text("Temperature (°C)");
-
-            svg.append("text")
-                .attr("class", "label")
-                .attr("transform", `translate(${width/2}, ${height - 10})`)
-                .style("text-anchor", "middle")
-                .text("Year");
-
-            // plot the data points
-            const line = d3.line()
-                .x(d => timeScale(d.year))
-                .y(d => dataScale(d.temperature));
-
-            chartArea.append("path")
-                .datum(data)
-                .attr("class", "line")
-                .attr("d", line)
-                .style("fill", "none")
-                .style("stroke", "#3498db")
-                .style("stroke-width", "2px");
-
-            chartArea.selectAll("circle")
-                .data(data)
-                .enter()
-                .append("circle")
-                .attr("cx", d => timeScale(d.year))
-                .attr("cy", d => dataScale(d.temperature))
-                .attr("r", 3)
-                .style("fill", "#3498db");
-        }
     </script>
   </body>
 </html>
