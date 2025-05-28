@@ -47,8 +47,23 @@ const CanvasLayer = L.Canvas.extend({
     }
 });
 
+// Define the color gradient stops
+const colorGradient = {
+    0.0: '#91003f',  // Deep purple (Very cold)
+    0.1: '#7f1f7f',  // Purple
+    0.2: '#4c2c9b',  // Blue-purple
+    0.3: '#1f3b9b',  // Dark blue
+    0.4: '#2f7eb6',  // Medium blue
+    0.5: '#40b6e5',  // Light blue
+    0.6: '#6be5bf',  // Turquoise
+    0.7: '#8fef73',  // Light green
+    0.8: '#efef45',  // Yellow
+    0.9: '#ef4524',  // Red
+    1.0: '#cc0000'   // Deep red (Very hot)
+};
+
 // Create legend control
-function createLegend(min, max) {
+function createLegend(min, max, segments) {
     if (legendControl) {
         map.removeControl(legendControl);
     }
@@ -56,66 +71,49 @@ function createLegend(min, max) {
     legendControl = L.control({position: 'bottomright'});
     legendControl.onAdd = function (map) {
         const div = L.DomUtil.create('div', 'info legend');
-        const grades = [
-            min,
-            min + (max - min) * 0.125,
-            min + (max - min) * 0.25,
-            min + (max - min) * 0.375,
-            min + (max - min) * 0.5,
-            min + (max - min) * 0.625,
-            min + (max - min) * 0.75,
-            min + (max - min) * 0.875,
-            max
-        ];
-
+        
+        // Create legend title
         div.innerHTML = '<div class="legend-title">Temperature (°C)</div>';
         div.innerHTML += '<div class="legend-container">';
         
-        // Create gradient bar
-        div.innerHTML += '<div class="gradient-bar">';
-        for (let i = 0; i < grades.length - 1; i++) {
-            const startColor = getColorForTemp((grades[i] - min) / (max - min));
-            const endColor = getColorForTemp((grades[i + 1] - min) / (max - min));
-            div.innerHTML += `
-                <div class="gradient-segment" style="background: linear-gradient(to right, ${startColor}, ${endColor});">
-                    <span class="temp-label">${Math.round(grades[i])}°</span>
-                </div>
-            `;
-        }
-        div.innerHTML += `<span class="temp-label">${Math.round(max)}°</span>`;
-        div.innerHTML += '</div>';
+        // Create continuous gradient bar
+        const gradientBar = document.createElement('div');
+        gradientBar.className = 'gradient-bar';
+        
+        // Create gradient background
+        const stops = Object.entries(colorGradient)
+            .map(([pos, color]) => `${color} ${pos * 100}%`)
+            .join(', ');
+        gradientBar.style.background = `linear-gradient(to right, ${stops})`;
+        
+        div.appendChild(gradientBar);
+
+        // Add temperature labels
+        const labelContainer = document.createElement('div');
+        labelContainer.className = 'temp-labels';
+        
+        // Add labels for each segment
+        segments.forEach((segment, index) => {
+            const label = document.createElement('span');
+            label.className = 'temp-label';
+            label.style.left = `${(index / (segments.length - 1)) * 100}%`;
+            label.textContent = `${Math.round(segment.start)}°`;
+            labelContainer.appendChild(label);
+        });
+        
+        // Add the final label
+        const finalLabel = document.createElement('span');
+        finalLabel.className = 'temp-label';
+        finalLabel.style.left = '100%';
+        finalLabel.textContent = `${Math.round(max)}°`;
+        labelContainer.appendChild(finalLabel);
+        
+        div.appendChild(labelContainer);
         div.innerHTML += '</div>';
         
         return div;
     };
     legendControl.addTo(map);
-}
-
-// Helper function to get color for temperature
-function getColorForTemp(normalizedTemp) {
-    const colors = {
-        0.0: '#0000FF',  // Bright Blue (Very cold)
-        0.1: '#00FFFF',  // Cyan
-        0.2: '#00FF90',  // Bright Turquoise
-        0.3: '#00FF00',  // Bright Green
-        0.4: '#80FF00',  // Lime Green
-        0.5: '#FFFF00',  // Bright Yellow
-        0.6: '#FFC000',  // Bright Orange
-        0.7: '#FF8000',  // Dark Orange
-        0.8: '#FF4000',  // Light Red
-        0.9: '#FF0000',  // Pure Red
-        1.0: '#800080'   // Purple
-    };
-
-    // Find the appropriate color stops
-    const stops = Object.keys(colors).map(Number);
-    for (let i = 0; i < stops.length - 1; i++) {
-        if (normalizedTemp <= stops[i + 1]) {
-            const t = (normalizedTemp - stops[i]) / (stops[i + 1] - stops[i]);
-            return interpolateColor(colors[stops[i]], colors[stops[i + 1]], t);
-        }
-    }
-    return colors[1.0];
 }
 
 // Fetch heatmap data and initialize the layer
@@ -139,18 +137,7 @@ fetch('/api/heatmap-data')
             blur: baseRadius * 1.5,
             maxZoom: 18,
             minOpacity: 0.35,
-            gradient: {
-                0.0: '#91003f',  // Deep purple (Very cold)
-                0.2: '#7f1f7f',  // Purple
-                0.3: '#4c2c9b',  // Blue-purple
-                0.4: '#1f3b9b',  // Dark blue
-                0.5: '#2f7eb6',  // Medium blue
-                0.6: '#40b6e5',  // Light blue
-                0.7: '#6be5bf',  // Turquoise
-                0.8: '#8fef73',  // Light green
-                0.9: '#efef45',  // Yellow
-                1.0: '#ef4524'   // Red (Very hot)
-            },
+            gradient: colorGradient,
             renderer: new CanvasLayer()  // Use our custom canvas renderer
         }).addTo(map);
 
@@ -162,8 +149,8 @@ fetch('/api/heatmap-data')
             [data.bounds.lat[1] + latPad, data.bounds.lon[1] + lonPad]
         ]);
 
-        // Create legend
-        createLegend(data.min, data.max);
+        // Create legend with segments
+        createLegend(data.min, data.max, data.segments);
 
         // Set up toggle button
         const toggleButton = document.getElementById('toggleTemp');
