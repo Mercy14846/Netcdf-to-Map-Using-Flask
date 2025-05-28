@@ -15,59 +15,83 @@ import matplotlib.colors as mcolors
 
 from datashader import transfer_functions as tf
 from datashader.utils import lnglat_to_meters
+import threading
 
 app = Flask(__name__)
 
-# Configure Flask-Caching
+# Configure Flask-Caching with increased timeout
 cache = Cache(app, config={
     'CACHE_TYPE': 'simple',
-    'CACHE_DEFAULT_TIMEOUT': 3600
+    'CACHE_DEFAULT_TIMEOUT': 7200  # 2 hours
 })
 
-# import dataset and handle missing values properly
-try:
-    data = xr.open_dataset("static/data/temp_2m.nc")
-    time_data = xr.open_dataset("static/data/temperature.nc")
-    
-    # Print dataset info for debugging
-    print("Main data structure:", data)
-    print("Time data structure:", time_data)
-    
-    # Ensure the temperature variable exists and get its name
-    temp_var = None
-    for var in data.data_vars:
-        if var in ['tmin', 'temp', 'temperature', 't2m']:
-            temp_var = var
-            break
-    
-    if temp_var is None:
-        print("Available variables in data:", list(data.data_vars))
-        raise ValueError("Could not find temperature variable in data")
-    
-    # find min/max data values to set global colorbar
-    min_val = float(data[temp_var].min())
-    max_val = float(data[temp_var].max())
-    
-    print(f"Temperature range: {min_val} to {max_val}")
-    
-    # extract dimensions
-    lon_array = data['longitude']
-    lat_array = data['latitude']
-    data_array = data[temp_var]
-    
-except Exception as e:
-    print(f"Error loading data: {str(e)}")
-    raise
-
-# Extract time series data array - assuming 'tmin' or 'temperature' is the variable name
+# Global variables for data
+data = None
+time_data = None
+temp_var = None
+min_val = None
+max_val = None
+lon_array = None
+lat_array = None
+data_array = None
 time_data_var = None
-for var in time_data.data_vars:
-    if var in ['tmin', 'temperature']:
-        time_data_var = time_data[var]
-        break
-if time_data_var is None:
-    print("Available variables in time_data:", list(time_data.data_vars))
-    raise ValueError("Could not find temperature variable in time series data")
+
+def load_data():
+    global data, time_data, temp_var, min_val, max_val, lon_array, lat_array, data_array, time_data_var
+    
+    try:
+        # Load the datasets
+        data = xr.open_dataset("static/data/temp_2m.nc")
+        time_data = xr.open_dataset("static/data/temperature.nc")
+        
+        # Print dataset info for debugging
+        print("Main data structure:", data)
+        print("Time data structure:", time_data)
+        
+        # Find temperature variable
+        for var in data.data_vars:
+            if var in ['tmin', 'temp', 'temperature', 't2m']:
+                temp_var = var
+                break
+        
+        if temp_var is None:
+            print("Available variables in data:", list(data.data_vars))
+            raise ValueError("Could not find temperature variable in data")
+        
+        # Calculate min/max values
+        min_val = float(data[temp_var].min())
+        max_val = float(data[temp_var].max())
+        
+        print(f"Temperature range: {min_val} to {max_val}")
+        
+        # Extract dimensions
+        lon_array = data['longitude']
+        lat_array = data['latitude']
+        data_array = data[temp_var]
+        
+        # Extract time series data
+        for var in time_data.data_vars:
+            if var in ['tmin', 'temperature']:
+                time_data_var = time_data[var]
+                break
+                
+        if time_data_var is None:
+            print("Available variables in time_data:", list(time_data.data_vars))
+            raise ValueError("Could not find temperature variable in time series data")
+            
+    except Exception as e:
+        print(f"Error loading data: {str(e)}")
+        raise
+
+# Load data in a background thread when the app starts
+threading.Thread(target=load_data).start()
+
+@app.before_first_request
+def initialize():
+    global data, time_data
+    # Wait for data to be loaded if it hasn't been already
+    if data is None or time_data is None:
+        load_data()
 
 # https://github.com/ScottSyms/tileshade/
 def tile2mercator(longitudetile, latitudetile, zoom):
@@ -241,84 +265,25 @@ def tile(longitude, latitude, zoom):
     results_bytes.seek(0)
     return send_file(results_bytes, mimetype='image/png')
 
+@app.route('/api/heatmap-data')
+@cache.cached(timeout=7200)
+def heatmap_data():
+    return jsonify(get_heatmap_data())
+
 @app.route('/time-series', methods=['POST'])
-def get_time_series():
+def time_series():
     try:
         request_data = request.get_json()
         if not request_data:
-            print("No JSON data received in request")
             return jsonify(error="No data received"), 400
             
         latitude = float(request_data.get('latitude'))
         longitude = float(request_data.get('longitude'))
         
-        print(f"Processing request for lat={latitude}, lon={longitude}")
-        
-        # Get the time series data using the correct coordinate names
-        ts_slice = time_data_var.sel(
-            longitude=longitude,
-            latitude=latitude,
-            method="nearest"
-        )
-        
-        print("Time series slice:", ts_slice)
-        print("Time series slice type:", type(ts_slice))
-        
-        # Get time values from the dataset
-        time_values = pd.to_datetime(time_data.time.values)
-        print("Time values:", time_values)
-        print("Time values type:", type(time_values))
-        print("Time values year type:", type(time_values.year))
-        
-        # Handle both array and scalar year values
-        if isinstance(time_values.year, (int, np.integer)):
-            years = [int(time_values.year)]
-            print("Single year value:", years[0])
-        else:
-            years = time_values.year.tolist()  # Convert to list to ensure it's iterable
-            print("Year values:", years[:5], "...")
-        
-        try:
-            # If ts_slice is a DataArray with time dimension
-            temp_values = ts_slice.values
-            if not isinstance(temp_values, np.ndarray):
-                temp_values = np.array([temp_values])
-            print("Temperature values shape:", temp_values.shape)
-            print("First few temperature values:", temp_values[:5])
-        except Exception as e:
-            print("Error processing temperature values:", str(e))
-            # If ts_slice is a scalar value
-            temp_values = np.full(len(years), float(ts_slice))
-            print("Created constant temperature array:", temp_values[:5])
-        
-        # Create DataFrame ensuring both arrays are the same length
-        df_slice = pd.DataFrame({
-            'year': years[:len(temp_values)],
-            'temperature': temp_values[:len(years)]
-        })
-        
-        print("Final DataFrame info:")
-        print(df_slice.info())
-        print("First few rows:")
-        print(df_slice.head())
-        
-        # Convert to JSON-serializable format
-        df_slice['year'] = df_slice['year'].astype(int)
-        df_slice['temperature'] = df_slice['temperature'].astype(float)
-        
-        # Convert to list of dictionaries for JSON serialization
-        data_list = [
-            {'year': int(row['year']), 'temperature': float(row['temperature'])}
-            for _, row in df_slice.iterrows()
-        ]
-        
-        return jsonify({'data': data_list})
+        return jsonify(get_time_series_data(latitude, longitude))
             
     except Exception as e:
-        print(f"Error processing time series: {str(e)}")
-        print("Dataset structure:", time_data)
-        print("Available coordinates:", time_data.coords)
-        print("Available variables:", time_data.variables)
+        print(f"Error in time series endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/layers')
@@ -369,24 +334,64 @@ WEATHER_PARAMS = {
     }
 }
 
-@app.route('/api/heatmap-data')
+# Cache time series data for each coordinate
+@cache.memoize(timeout=7200)
+def get_time_series_data(latitude, longitude):
+    try:
+        ts_slice = time_data_var.sel(
+            longitude=longitude,
+            latitude=latitude,
+            method="nearest"
+        )
+        
+        time_values = pd.to_datetime(time_data.time.values)
+        
+        if isinstance(time_values.year, (int, np.integer)):
+            years = [int(time_values.year)]
+        else:
+            years = time_values.year.tolist()
+        
+        try:
+            temp_values = ts_slice.values
+            if not isinstance(temp_values, np.ndarray):
+                temp_values = np.array([temp_values])
+        except Exception as e:
+            print("Error processing temperature values:", str(e))
+            temp_values = np.full(len(years), float(ts_slice))
+        
+        # Create data list
+        data_list = []
+        for year, temp in zip(years[:len(temp_values)], temp_values[:len(years)]):
+            if not np.isnan(temp):  # Skip NaN values
+                data_list.append({
+                    'year': int(year),
+                    'temperature': float(temp)
+                })
+        
+        return {'data': data_list}
+            
+    except Exception as e:
+        print(f"Error processing time series: {str(e)}")
+        return {'error': str(e)}
+
+# Cache the heatmap data
+@cache.memoize(timeout=7200)
 def get_heatmap_data():
     try:
-        # Get the raw grid data
-        lats = data['latitude'].values
-        lons = data['longitude'].values
+        # Create regular grid of data
+        lats = lat_array.values
+        lons = lon_array.values
         temps = data_array.values
 
-        # Create temperature segments for better visualization
-        # Calculate temperature segments using percentiles for better distribution
-        temp_range = np.linspace(min_val, max_val, 10)  # 10 segments
+        # Calculate temperature segments
+        temp_range = np.linspace(min_val, max_val, 10)
         
         # Create a regular grid of data
         grid_data = []
         lat_step = abs(lats[1] - lats[0])
         lon_step = abs(lons[1] - lons[0])
 
-        # Calculate the number of points to sample based on grid resolution
+        # Calculate the number of points to sample
         lat_samples = len(lats)
         lon_samples = len(lons)
 
@@ -401,13 +406,8 @@ def get_heatmap_data():
         for i, lat in enumerate(lats):
             for j, lon in enumerate(lons):
                 if not np.isnan(temps[i, j]):
-                    # Scale temperature values to 0-1 range for better heatmap visualization
                     normalized_temp = (float(temps[i, j]) - min_val) / (max_val - min_val)
-                    grid_data.append([
-                        float(lat),
-                        float(lon),
-                        normalized_temp  # Use normalized temperature for intensity
-                    ])
+                    grid_data.append([float(lat), float(lon), normalized_temp])
 
         # Create segments for the legend
         segments = []
@@ -415,10 +415,10 @@ def get_heatmap_data():
             segments.append({
                 'start': float(temp_range[i]),
                 'end': float(temp_range[i + 1]),
-                'color': None  # Will be set by the frontend
+                'color': None
             })
 
-        return jsonify({
+        return {
             'data': grid_data,
             'min': float(min_val),
             'max': float(max_val),
@@ -431,10 +431,10 @@ def get_heatmap_data():
                 'lat': float(lat_step),
                 'lon': float(lon_step)
             }
-        })
+        }
     except Exception as e:
         print(f"Error generating heatmap data: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return {'error': str(e)}
 
 if __name__ == '__main__':
    app.run(debug=True)
