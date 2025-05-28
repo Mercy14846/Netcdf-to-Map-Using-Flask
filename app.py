@@ -377,24 +377,45 @@ def get_heatmap_data():
         lons = data['longitude'].values
         temps = data_array.values
 
-        # Create a list of [lat, lon, temp] for each grid point
-        heatmap_data = []
-        for i in range(len(lats)):
-            for j in range(len(lons)):
-                if not np.isnan(temps[i, j]):  # Only include non-NaN values
-                    heatmap_data.append([
-                        float(lats[i]),
-                        float(lons[j]),
-                        float(temps[i, j])
+        # Create a regular grid of data
+        grid_data = []
+        lat_step = abs(lats[1] - lats[0])
+        lon_step = abs(lons[1] - lons[0])
+
+        # Calculate the number of points to sample based on grid resolution
+        lat_samples = len(lats)
+        lon_samples = len(lons)
+
+        # Create a downsampled grid if the resolution is too high
+        if lat_samples * lon_samples > 10000:
+            stride = int(np.sqrt((lat_samples * lon_samples) / 10000))
+            lats = lats[::stride]
+            lons = lons[::stride]
+            temps = temps[::stride, ::stride]
+
+        # Create the grid data
+        for i, lat in enumerate(lats):
+            for j, lon in enumerate(lons):
+                if not np.isnan(temps[i, j]):
+                    # Scale temperature values to 0-1 range for better heatmap visualization
+                    normalized_temp = (float(temps[i, j]) - min_val) / (max_val - min_val)
+                    grid_data.append([
+                        float(lat),
+                        float(lon),
+                        normalized_temp  # Use normalized temperature for intensity
                     ])
-        
+
         return jsonify({
-            'data': heatmap_data,
-            'min': min_val,
-            'max': max_val,
+            'data': grid_data,
+            'min': float(min_val),
+            'max': float(max_val),
             'bounds': {
                 'lat': [float(lats.min()), float(lats.max())],
                 'lon': [float(lons.min()), float(lons.max())]
+            },
+            'resolution': {
+                'lat': float(lat_step),
+                'lon': float(lon_step)
             }
         })
     except Exception as e:
