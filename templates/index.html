@@ -86,10 +86,67 @@
         .temp-icon.hot {
             color: #e74c3c;
         }
+
+        .time-slider-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+            width: 300px;
+            text-align: center;
+        }
+
+        .time-slider-container .year-display {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .time-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .time-controls {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .time-control-btn {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .time-control-btn:hover {
+            background: #f0f0f0;
+        }
+
+        .time-control-btn.play-pause {
+            width: 40px;
+        }
         
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .time-slider-container {
+                width: 80%;
+                bottom: 20px;
+            }
         }
     </style>
   </head>
@@ -98,6 +155,24 @@
     <div id="map">
         <div class="loading-overlay" id="loading-overlay">
             <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+    <!-- Time slider control -->
+    <div class="time-slider-container">
+        <div class="year-display">Year: <span id="selected-year">1840</span></div>
+        <input type="range" class="time-slider" id="year-slider" 
+               min="1840" max="2024" value="1840" step="1">
+        <div class="time-controls">
+            <button class="time-control-btn" id="prev-year">
+                <i class="fas fa-step-backward"></i>
+            </button>
+            <button class="time-control-btn play-pause" id="play-pause">
+                <i class="fas fa-play"></i>
+            </button>
+            <button class="time-control-btn" id="next-year">
+                <i class="fas fa-step-forward"></i>
+            </button>
         </div>
     </div>
 
@@ -116,6 +191,87 @@
     <script>
         let currentPopup = null;
         let currentMarker = null;
+        let isPlaying = false;
+        let playInterval = null;
+        let currentYear = 1840;
+        let dataExtent = null;
+
+        // Initialize time controls
+        const yearSlider = document.getElementById('year-slider');
+        const yearDisplay = document.getElementById('selected-year');
+        const playPauseBtn = document.getElementById('play-pause');
+        const prevYearBtn = document.getElementById('prev-year');
+        const nextYearBtn = document.getElementById('next-year');
+
+        // Fetch data extent from the server
+        fetch('/api/data-extent')
+            .then(response => response.json())
+            .then(extent => {
+                dataExtent = extent;
+                // Update the map to show data boundaries
+                if (extent.bounds) {
+                    const bounds = L.latLngBounds(
+                        [extent.bounds.lat.min, extent.bounds.lon.min],
+                        [extent.bounds.lat.max, extent.bounds.lon.max]
+                    );
+                    map.fitBounds(bounds);
+                }
+            })
+            .catch(error => console.error('Error fetching data extent:', error));
+
+        function isPointInDataBounds(latlng) {
+            if (!dataExtent || !dataExtent.bounds) return false;
+            
+            const bounds = dataExtent.bounds;
+            return latlng.lat >= bounds.lat.min && 
+                   latlng.lat <= bounds.lat.max && 
+                   latlng.lng >= bounds.lon.min && 
+                   latlng.lng <= bounds.lon.max;
+        }
+
+        function updateYear(year) {
+            currentYear = year;
+            yearDisplay.textContent = year;
+            yearSlider.value = year;
+            // Update the map display for the new year
+            updateMapDisplay(year);
+        }
+
+        function togglePlayPause() {
+            isPlaying = !isPlaying;
+            playPauseBtn.innerHTML = isPlaying ? 
+                '<i class="fas fa-pause"></i>' : 
+                '<i class="fas fa-play"></i>';
+
+            if (isPlaying) {
+                playInterval = setInterval(() => {
+                    let nextYear = parseInt(yearSlider.value) + 1;
+                    if (nextYear > 2024) {
+                        nextYear = 1840;
+                    }
+                    updateYear(nextYear);
+                }, 1000); // Change year every second
+            } else {
+                clearInterval(playInterval);
+            }
+        }
+
+        // Event listeners for time controls
+        yearSlider.addEventListener('input', (e) => {
+            updateYear(parseInt(e.target.value));
+        });
+
+        playPauseBtn.addEventListener('click', togglePlayPause);
+
+        prevYearBtn.addEventListener('click', () => {
+            let prevYear = Math.max(1840, parseInt(yearSlider.value) - 1);
+            updateYear(prevYear);
+        });
+
+        nextYearBtn.addEventListener('click', () => {
+            let nextYear = Math.min(2024, parseInt(yearSlider.value) + 1);
+            updateYear(nextYear);
+        });
 
         function createPopupContent(latlng) {
             const template = document.getElementById('popup-template');
@@ -141,9 +297,8 @@
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
             
-            // Clear temperature display
             container.querySelector('.temp-update').textContent = '--';
-            updateTempIcon(container, 0); // Reset icon
+            updateTempIcon(container, 0);
         }
 
         function clearError(container) {
@@ -153,23 +308,28 @@
         }
 
         map.on('click', function(e) {
+            // Check if click is within data bounds
+            if (!isPointInDataBounds(e.latlng)) {
+                if (currentPopup) {
+                    map.closePopup(currentPopup);
+                }
+                if (currentMarker) {
+                    map.removeLayer(currentMarker);
+                }
+                return;
+            }
+
             let clickedCoords = e.latlng;
             
-            // Remove previous marker if it exists
             if (currentMarker) {
                 map.removeLayer(currentMarker);
             }
             
-            // Create new marker
             currentMarker = L.marker(clickedCoords).addTo(map);
             
-            // Create and setup popup content
             const popupContent = createPopupContent(clickedCoords);
-            
-            // Clear temperature display while loading
             popupContent.querySelector('.temp-update').textContent = 'Loading...';
             
-            // Create and bind popup
             currentPopup = L.popup({
                 maxWidth: 200,
                 className: 'custom-popup'
@@ -178,12 +338,13 @@
             .setContent(popupContent)
             .openOn(map);
             
-            // Fetch time series data
+            // Include the current year in the request
             fetch('/time-series', {
                 method: 'POST',
                 body: JSON.stringify({ 
                     latitude: clickedCoords.lat,
-                    longitude: clickedCoords.lng 
+                    longitude: clickedCoords.lng,
+                    year: currentYear
                 }),
                 headers: {
                     'Content-Type': 'application/json'
@@ -214,11 +375,11 @@
                 const timeSeriesData = data.data;
                 
                 if (timeSeriesData.length > 0) {
-                    const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
-                    if (typeof latestTemp === 'number' && !isNaN(latestTemp)) {
-                        const tempText = latestTemp.toFixed(1) + '°C';
+                    const temp = timeSeriesData[0].temperature;
+                    if (typeof temp === 'number' && !isNaN(temp)) {
+                        const tempText = temp.toFixed(1) + '°C';
                         popupContent.querySelector('.temp-update').textContent = tempText;
-                        updateTempIcon(popupContent, latestTemp);
+                        updateTempIcon(popupContent, temp);
                     } else {
                         popupContent.querySelector('.temp-update').textContent = 'N/A';
                         updateTempIcon(popupContent, 0);
@@ -236,6 +397,15 @@
                 currentPopup.update();
             });
         });
+
+        // Function to update map display based on year
+        function updateMapDisplay(year) {
+            // Update tile layer or heatmap based on selected year
+            // This will be implemented when the year-specific data is available
+            if (map.currentLayer) {
+                map.currentLayer.redraw();
+            }
+        }
     </script>
   </body>
 </html>
