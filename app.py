@@ -413,4 +413,11 @@ WEATHER_PARAMS = {
 }
 
 if __name__ == '__main__':
-    run_simple('localhost', 5000, app, use_reloader=True, use_debugger=True)
+    # Run the app on all network interfaces (0.0.0.0)
+    # This makes it accessible from other devices on the network
+    # Default port is 5000, but you can change it if needed
+    app.run(
+        host='0.0.0.0',  # Listen on all network interfaces
+        port=8080,       # You can change this port if needed
+        debug=True       # Keep debug mode for development
+    )
