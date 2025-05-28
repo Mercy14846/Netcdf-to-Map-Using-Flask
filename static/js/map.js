@@ -116,7 +116,17 @@ function createLegend(min, max, segments) {
     legendControl.addTo(map);
 }
 
+// Add loading indicator functions
+function showLoading() {
+    document.getElementById('loading-overlay').style.display = 'flex';
+}
+
+function hideLoading() {
+    document.getElementById('loading-overlay').style.display = 'none';
+}
+
 // Fetch heatmap data and initialize the layer
+showLoading();
 fetch('/api/heatmap-data')
     .then(response => response.json())
     .then(data => {
@@ -169,6 +179,9 @@ fetch('/api/heatmap-data')
     })
     .catch(error => {
         console.error('Error loading heatmap data:', error);
+    })
+    .finally(() => {
+        hideLoading();
     });
 
 // Create layer control panel
@@ -246,6 +259,10 @@ map.on('click', async function(e) {
     const lat = e.latlng.lat.toFixed(4);
     const lng = e.latlng.lng.toFixed(4);
     
+    // Show loading state
+    document.getElementById('temp-update').textContent = 'Loading...';
+    showLoading();
+    
     try {
         const response = await fetch('/time-series', {
             method: 'POST',
@@ -261,29 +278,33 @@ map.on('click', async function(e) {
         const data = await response.json();
         
         if (data.error) {
-            console.error('Error:', data.error);
-            return;
+            throw new Error(data.error);
         }
         
-        // Create popup content with temperature info
-        const temp = data.data[data.data.length - 1].temperature.toFixed(1);
-        const popupContent = `
-            <div class="temperature-popup">
-                <img src="/static/img/temp-icon.svg" class="weather-icon" alt="Temperature">
-                <span class="temperature-value">${temp}°C</span>
-                <br>
-                Lat: ${lat}° N<br>
-                Lon: ${lng}° E
-            </div>
-        `;
+        if (!data.data || !Array.isArray(data.data)) {
+            throw new Error('Invalid data format received from server');
+        }
         
-        L.popup()
-            .setLatLng(e.latlng)
-            .setContent(popupContent)
-            .openOn(map);
-            
+        timeSeriesData = data.data;
+        
+        if (timeSeriesData.length > 0) {
+            const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
+            if (typeof latestTemp === 'number' && !isNaN(latestTemp)) {
+                document.getElementById('temp-update').textContent = latestTemp.toFixed(2) + '°C';
+            } else {
+                document.getElementById('temp-update').textContent = 'N/A';
+            }
+        } else {
+            document.getElementById('temp-update').textContent = 'No data';
+        }
+        
+        plotData(timeSeriesData, e.latlng);
     } catch (error) {
-        console.error('Error fetching temperature data:', error);
+        console.error('Error details:', error);
+        showError(error.message);
+        document.getElementById('temp-update').textContent = '--';
+    } finally {
+        hideLoading();
     }
 });
 
