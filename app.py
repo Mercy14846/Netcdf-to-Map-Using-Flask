@@ -6,7 +6,7 @@ from flask_caching import Cache
 import io
 import math
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import datashader as ds
 import pandas as pd
 import xarray as xr
@@ -28,7 +28,8 @@ app = Flask(__name__)
 # Configure Flask-Caching with increased timeout
 cache = Cache(app, config={
     'CACHE_TYPE': 'simple',
-    'CACHE_DEFAULT_TIMEOUT': 7200  # 2 hours
+    'CACHE_DEFAULT_TIMEOUT': 7200,  # 2 hours
+    'CACHE_THRESHOLD': 1000  # Maximum number of items to store in cache
 })
 
 # Global variables for data
@@ -263,18 +264,73 @@ def generateatile(zoom, longitude, latitude):
 def index():
     return render_template('index.html')
 
+def create_error_tile(error_message):
+    """Create a tile with an error message"""
+    img = Image.new('RGBA', (256, 256), (255, 255, 255, 128))
+    draw = ImageDraw.Draw(img)
+    
+    # Wrap text to fit tile
+    words = error_message.split()
+    lines = []
+    current_line = []
+    for word in words:
+        current_line.append(word)
+        if len(' '.join(current_line)) > 20:  # Adjust based on tile size
+            if len(current_line) > 1:
+                lines.append(' '.join(current_line[:-1]))
+                current_line = [word]
+            else:
+                lines.append(word)
+                current_line = []
+    if current_line:
+        lines.append(' '.join(current_line))
+    
+    # Draw error message
+    y = 128 - (len(lines) * 10)  # Center text vertically
+    for line in lines:
+        # Calculate text width to center horizontally
+        bbox = draw.textbbox((0, 0), line)
+        text_width = bbox[2] - bbox[0]
+        x = (256 - text_width) // 2
+        draw.text((x, y), line, fill=(255, 0, 0, 255))
+        y += 20
+    
+    return img
+
 @app.route("/tiles/<int:zoom>/<int:longitude>/<int:latitude>.png")
+@cache.memoize(timeout=7200)
 def tile(longitude, latitude, zoom):
-    results = generateatile(zoom, longitude, latitude)
-    # image passed off to bytestream
-    results_bytes = io.BytesIO()
-    if isinstance(results, Image.Image):
-        results.save(results_bytes, format='PNG')
-    else:
-        # If for some reason we don't have a PIL Image, create an empty one
-        create_empty_tile().save(results_bytes, format='PNG')
-    results_bytes.seek(0)
-    return send_file(results_bytes, mimetype='image/png')
+    try:
+        # Validate zoom level
+        if zoom < 0 or zoom > 20:
+            return send_file(create_error_tile("Invalid zoom level").save(io.BytesIO(), format='PNG'), mimetype='image/png')
+        
+        # Check if coordinates are within valid range
+        if longitude < 0 or longitude >= 2**zoom or latitude < 0 or latitude >= 2**zoom:
+            return send_file(create_error_tile("Invalid tile coordinates").save(io.BytesIO(), format='PNG'), mimetype='image/png')
+        
+        results = generateatile(zoom, longitude, latitude)
+        
+        # Convert results to bytes
+        results_bytes = io.BytesIO()
+        if isinstance(results, Image.Image):
+            try:
+                results.save(results_bytes, format='PNG')
+            except Exception as e:
+                print(f"Error saving tile image: {str(e)}")
+                return send_file(create_error_tile("Error saving tile").save(io.BytesIO(), format='PNG'), mimetype='image/png')
+        else:
+            print("Invalid tile result type")
+            return send_file(create_error_tile("Invalid tile data").save(io.BytesIO(), format='PNG'), mimetype='image/png')
+        
+        results_bytes.seek(0)
+        return send_file(results_bytes, mimetype='image/png')
+        
+    except Exception as e:
+        print(f"Error generating tile: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return send_file(create_error_tile("Tile generation error").save(io.BytesIO(), format='PNG'), mimetype='image/png')
 
 @app.route('/api/heatmap-data')
 @cache.cached(timeout=7200)
