@@ -56,45 +56,33 @@ def load_data():
         print("DEBUG: Available variables in temp_2m.nc:", list(data.data_vars))
         print("DEBUG: Available variables in temperature.nc:", list(time_data.data_vars))
         
-        # Find temperature variable without recursion
+        # Find temperature variable
         temp_vars = ['tmin', 'temp', 'temperature', 't2m']
         temp_var = next((var for var in data.data_vars if var in temp_vars), None)
         
         if temp_var is None:
-            print("DEBUG: Could not find standard temperature variable, checking all variables:", list(data.data_vars))
-            # If standard names not found, take the first variable as temperature
+            print("DEBUG: Could not find standard temperature variable, using first available")
             temp_var = list(data.data_vars)[0]
-            print(f"DEBUG: Using first available variable as temperature: {temp_var}")
         
         print(f"DEBUG: Selected temperature variable: {temp_var}")
-        print(f"DEBUG: Temperature variable shape: {data[temp_var].shape}")
         
-        # Calculate min/max values using dask
+        # Calculate min/max values
         data_values = data[temp_var].values
         min_val = float(np.nanmin(data_values))
         max_val = float(np.nanmax(data_values))
-        
-        print(f"DEBUG: Temperature range: {min_val} to {max_val}")
         
         # Extract dimensions
         lon_array = data['longitude']
         lat_array = data['latitude']
         data_array = data[temp_var]
         
-        print("DEBUG: Coordinate ranges:")
-        print(f"Latitude: {float(lat_array.min())} to {float(lat_array.max())}")
-        print(f"Longitude: {float(lon_array.min())} to {float(lon_array.max())}")
-        
-        # Extract time series data without recursion
+        # Extract time series data
         time_vars = ['tmin', 'temperature']
         time_data_var = next((time_data[var] for var in time_vars if var in time_data.data_vars), None)
         
         if time_data_var is None:
-            print("DEBUG: Could not find standard time series variable, checking all variables:", list(time_data.data_vars))
-            # If standard names not found, take the first variable as temperature
             time_data_var = time_data[list(time_data.data_vars)[0]]
-            print(f"DEBUG: Using first available variable for time series: {list(time_data.data_vars)[0]}")
-        
+            
         print("DEBUG: Data loading completed successfully")
             
     except Exception as e:
@@ -438,14 +426,11 @@ def time_series():
             
         latitude = float(request_data.get('latitude'))
         longitude = float(request_data.get('longitude'))
-        year = int(request_data.get('year', 2024))  # Default to 2024 if not specified
+        year = int(request_data.get('year', 2024))
         
-        print(f"\nDEBUG: Processing request for lat={latitude}, lon={longitude}, year={year}")
-        
-        # Validate coordinates are within bounds
+        # Validate coordinates
         if (latitude < lat_array.min() or latitude > lat_array.max() or
             longitude < lon_array.min() or longitude > lon_array.max()):
-            print(f"DEBUG: Coordinates out of bounds - Requested: ({latitude}, {longitude}), Bounds: ({lat_array.min()}, {lat_array.max()}), ({lon_array.min()}, {lon_array.max()})")
             return jsonify(error="Coordinates out of bounds"), 400
 
         try:
@@ -453,70 +438,43 @@ def time_series():
             lat_idx = np.abs(lat_array.values - latitude).argmin()
             lon_idx = np.abs(lon_array.values - longitude).argmin()
             
-            print(f"DEBUG: Selected grid points - lat_idx={lat_idx}, lon_idx={lon_idx}")
-            print(f"DEBUG: Actual coordinates - lat={lat_array.values[lat_idx]}, lon={lon_array.values[lon_idx]}")
-            
-            # Get base temperature from the data
+            # Get base temperature
             base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
             if np.isnan(base_temp):
-                print("DEBUG: Warning - NaN value found in base temperature")
                 base_temp = 15.0  # Default temperature if NaN
             
-            # Temperature adjustments based on real-world patterns:
+            # Calculate temperature components
+            lat_effect = -0.6 * abs(latitude)  # Temperature decrease with latitude
             
-            # 1. Latitude effect: Temperature decreases with distance from equator
-            # Approximately -0.6°C per degree of latitude from equator
-            lat_effect = -0.6 * abs(latitude)  # Direct degree effect
-            
-            # 2. Elevation effect (estimated from location)
-            # Rough estimate: -6.5°C per 1000m elevation
-            elevation_effect = 0  # Would need elevation data for more accuracy
-            
-            # 3. Seasonal effect (varies with latitude)
-            # Stronger seasonal variation at higher latitudes
-            season_strength = abs(latitude) / 90.0  # 0 at equator, 1 at poles
-            # Calculate month (1-12) based on fractional part of the year
+            # Seasonal effect
+            season_strength = abs(latitude) / 90.0
             month = ((year - int(year)) * 12) + 1
-            if month > 12:  # Ensure month is between 1 and 12
+            if month > 12:
                 month = 1
             
-            # Adjust seasonal effect based on hemisphere
+            # Adjust for hemisphere
             if latitude < 0:  # Southern hemisphere
-                month = (month + 6) % 12  # Shift seasons by 6 months
-                if month == 0:
-                    month = 12
+                month = (month + 6) % 12 or 12
             
             seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * ((month - 1) / 12))
             
-            # 4. Historical warming trend
-            # Global average temperature has increased by about 1.1°C since 1880
+            # Historical warming
             historical_effect = 1.1 * (year - 1840) / (2024 - 1840)
             
-            # 5. Ocean moderating effect
-            # Simplified ocean effect based on longitude (rough approximation)
-            ocean_effect = 0
-            
-            # Combine all effects
-            final_temp = base_temp + lat_effect + elevation_effect + seasonal_effect + historical_effect + ocean_effect
+            # Calculate final temperature
+            final_temp = base_temp + lat_effect + seasonal_effect + historical_effect
             
             # Ensure temperature stays within physical limits
             final_temp = min(max(final_temp, -40), 40)
-            
-            print(f"DEBUG: Temperature calculation components:")
-            print(f"Base temp: {base_temp:.2f}°C")
-            print(f"Latitude effect: {lat_effect:.2f}°C")
-            print(f"Seasonal effect: {seasonal_effect:.2f}°C (Month: {month}, Strength: {season_strength:.2f})")
-            print(f"Historical warming: {historical_effect:.2f}°C")
-            print(f"Final temperature: {final_temp:.2f}°C")
 
             data = [{
                 'year': year,
-                'temperature': round(float(final_temp), 2),
+                'temperature': round(float(final_temp), 1),
                 'components': {
-                    'base_temp': round(float(base_temp), 2),
-                    'latitude_effect': round(float(lat_effect), 2),
-                    'seasonal_effect': round(float(seasonal_effect), 2),
-                    'historical_warming': round(float(historical_effect), 2),
+                    'base_temp': round(float(base_temp), 1),
+                    'latitude_effect': round(float(lat_effect), 1),
+                    'seasonal_effect': round(float(seasonal_effect), 1),
+                    'historical_warming': round(float(historical_effect), 1),
                     'month': int(month)
                 }
             }]
