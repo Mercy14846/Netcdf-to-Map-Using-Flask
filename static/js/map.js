@@ -7,21 +7,51 @@ let currentTooltip = null;
 L.HeatLayer = L.HeatLayer.extend({
     _initCanvas: function () {
         let canvas = L.DomUtil.create('canvas', 'leaflet-heatmap-layer');
-
-        let size = this._map.getSize();
-        canvas.width = size.x;
-        canvas.height = size.y;
-
+        
+        // Initialize with default size
+        canvas.width = 100;
+        canvas.height = 100;
+        
         let animated = this._map.options.zoomAnimation && L.Browser.any3d;
         L.DomUtil.addClass(canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
 
         // Set willReadFrequently to true for better performance
         this._canvas = canvas;
         this._ctx = canvas.getContext('2d', { willReadFrequently: true });
-        this._width = canvas.width;
-        this._height = canvas.height;
-
+        
+        // Initial size setup
+        this._updateCanvasSize();
+        
         return canvas;
+    },
+
+    _updateCanvasSize: function () {
+        if (this._map && this._canvas) {
+            let size = this._map.getSize();
+            this._canvas.width = size.x;
+            this._canvas.height = size.y;
+            this._width = this._canvas.width;
+            this._height = this._canvas.height;
+            this._draw();
+        }
+    },
+
+    onAdd: function (map) {
+        this._map = map;
+        if (!this._canvas) {
+            this._initCanvas();
+        }
+
+        map._panes.overlayPane.appendChild(this._canvas);
+
+        map.on('moveend', this._reset, this);
+        map.on('resize', this._updateCanvasSize, this);
+
+        if (map.options.zoomAnimation && L.Browser.any3d) {
+            map.on('zoomanim', this._animateZoom, this);
+        }
+
+        this._reset();
     }
 });
 
