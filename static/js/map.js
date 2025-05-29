@@ -3,25 +3,6 @@ let currentYear = 2024;  // Fixed to 2024
 let heatmapLayer = null;
 let currentTooltip = null;
 
-// Create a custom canvas factory that sets willReadFrequently
-const createCanvas = function() {
-    const canvas = document.createElement('canvas');
-    canvas.style.position = 'absolute';
-    canvas.style.top = '0';
-    canvas.style.left = '0';
-    canvas.style.pointerEvents = 'none';
-    return canvas;
-};
-
-// Extend the original heat layer's _initCanvas method
-const originalInitCanvas = L.HeatLayer.prototype._initCanvas;
-L.HeatLayer.prototype._initCanvas = function() {
-    const canvas = originalInitCanvas.call(this);
-    // Set willReadFrequently to true for better performance
-    this._ctx = canvas.getContext('2d', { willReadFrequently: true });
-    return canvas;
-};
-
 // Initialize the map with better default view
 const map = L.map('map', {
     center: [20, 0],
@@ -53,15 +34,23 @@ const temperatureGradient = {
     1.0: '#FF1700'   // Red (40°C)
 };
 
-// Initialize heatmap layer with enhanced settings
+// Create a canvas with willReadFrequently set
+function createHeatCanvas(options) {
+    const canvas = document.createElement('canvas');
+    canvas.getContext('2d', { willReadFrequently: true });
+    return canvas;
+}
+
+// Initialize heatmap layer with enhanced settings and custom canvas
 heatmapLayer = L.heatLayer([], {
-    radius: 20,      // Smaller radius for more precise temperature regions
-    blur: 10,        // Less blur for sharper boundaries
+    radius: 20,
+    blur: 10,
     maxZoom: 8,
     max: 1.0,
     gradient: temperatureGradient,
-    minOpacity: 0.5, // Increased minimum opacity
-    maxOpacity: 0.8
+    minOpacity: 0.5,
+    maxOpacity: 0.8,
+    _createCanvas: createHeatCanvas
 }).addTo(map);
 
 // Add attribution control in bottom right
