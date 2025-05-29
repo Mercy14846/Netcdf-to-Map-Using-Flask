@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temperature Map 2024</title>
+    <title>Temperature Map</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -27,6 +27,7 @@
         body {
             margin: 0;
             padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
         
         #map {
@@ -34,17 +35,19 @@
             height: 100vh;
             position: relative;
             z-index: 1;
+            background: #f8f9fa;
         }
 
         .legend {
             position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.9);
+            bottom: 30px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.95);
             padding: 10px;
             border-radius: 4px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
             z-index: 1000;
+            font-size: 12px;
         }
 
         .legend-gradient {
@@ -54,18 +57,23 @@
             float: left;
             background: linear-gradient(
                 to bottom,
-                #FF0000,  /* Hot */
-                #FFA500,  /* Warm */
-                #FFFF00,  /* Mild */
-                #00FF00,  /* Cool */
-                #00FFFF,  /* Cold */
-                #0000FF   /* Very Cold */
+                #FF1700,  /* Hot */
+                #FF6B00,  /* Warm */
+                #FFB300,  /* Orange */
+                #FFFF00,  /* Yellow */
+                #8FFF75,  /* Light Green */
+                #80FFE5,  /* Cyan */
+                #6CCDFF,  /* Light Cyan */
+                #51B8FF,  /* Cyan Blue */
+                #3D9EFF,  /* Light Blue */
+                #2B65EC,  /* Deep Blue */
+                #91319A   /* Cold Purple */
             );
         }
 
         .legend-labels {
             float: left;
-            line-height: 40px;
+            line-height: 20px;
             color: #333;
         }
 
@@ -84,7 +92,7 @@
 
         .loading-spinner {
             color: #333;
-            font-size: 18px;
+            font-size: 14px;
         }
 
         .error-message {
@@ -95,9 +103,54 @@
             transform: translateX(-50%);
             background: rgba(255, 0, 0, 0.8);
             color: white;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 4px;
             z-index: 2000;
+            font-size: 14px;
+        }
+
+        .layer-control {
+            background: white;
+            padding: 6px 8px;
+            border-radius: 4px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+
+        .layer-toggle {
+            font-size: 14px;
+            color: #333;
+            user-select: none;
+        }
+
+        .layer-toggle label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .layer-toggle input[type="checkbox"] {
+            margin-right: 6px;
+        }
+
+        /* OpenWeatherMap-style controls */
+        .leaflet-control-zoom {
+            border: none !important;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2) !important;
+        }
+
+        .leaflet-control-zoom a {
+            background: white !important;
+            color: #333 !important;
+            border: none !important;
+        }
+
+        .leaflet-control-zoom a:hover {
+            background: #f8f9fa !important;
+        }
+
+        .leaflet-control-attribution {
+            background: rgba(255, 255, 255, 0.95) !important;
+            font-size: 11px !important;
         }
     </style>
   </head>
@@ -106,7 +159,7 @@
 
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner">Loading...</div>
+        <div class="loading-spinner">Loading temperature data...</div>
     </div>
 
     <!-- Error Message -->
@@ -117,10 +170,15 @@
         <div class="legend-gradient"></div>
         <div class="legend-labels">
             <div>40°C</div>
-            <div>30°C</div>
-            <div>20°C</div>
-            <div>10°C</div>
+            <div>32°C</div>
+            <div>24°C</div>
+            <div>16°C</div>
+            <div>8°C</div>
             <div>0°C</div>
+            <div>-8°C</div>
+            <div>-16°C</div>
+            <div>-24°C</div>
+            <div>-32°C</div>
             <div>-40°C</div>
         </div>
     </div>
