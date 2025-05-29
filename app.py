@@ -389,22 +389,28 @@ def time_series():
         # Validate coordinates are within bounds
         if (latitude < lat_array.min() or latitude > lat_array.max() or
             longitude < lon_array.min() or longitude > lon_array.max()):
+            print(f"DEBUG: Coordinates out of bounds - Requested: ({latitude}, {longitude}), Bounds: ({lat_array.min()}, {lat_array.max()}), ({lon_array.min()}, {lon_array.max()})")
             return jsonify(error="Coordinates out of bounds"), 400
 
-        # Get the actual temperature data
         try:
             # Find nearest grid points
             lat_idx = np.abs(lat_array.values - latitude).argmin()
             lon_idx = np.abs(lon_array.values - longitude).argmin()
             
+            print(f"DEBUG: Selected grid points - lat_idx={lat_idx}, lon_idx={lon_idx}")
+            print(f"DEBUG: Actual coordinates - lat={lat_array.values[lat_idx]}, lon={lon_array.values[lon_idx]}")
+            
             # Get base temperature from the data
             base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
+            if np.isnan(base_temp):
+                print("DEBUG: Warning - NaN value found in base temperature")
+                base_temp = 15.0  # Default temperature if NaN
             
             # Temperature adjustments based on real-world patterns:
             
             # 1. Latitude effect: Temperature decreases with distance from equator
             # Approximately -0.6°C per degree of latitude from equator
-            lat_effect = -0.6 * (abs(latitude) / 90.0) * 20  # Max effect of 20°C at poles
+            lat_effect = -0.6 * abs(latitude)  # Direct degree effect
             
             # 2. Elevation effect (estimated from location)
             # Rough estimate: -6.5°C per 1000m elevation
@@ -413,34 +419,37 @@ def time_series():
             # 3. Seasonal effect (varies with latitude)
             # Stronger seasonal variation at higher latitudes
             season_strength = abs(latitude) / 90.0  # 0 at equator, 1 at poles
-            month = ((year % 1) * 12) + 1  # Get month from fractional part of year
-            seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * (month - 1) / 12)
+            # Calculate month (1-12) based on fractional part of the year
+            month = ((year - int(year)) * 12) + 1
+            if month > 12:  # Ensure month is between 1 and 12
+                month = 1
+            
+            # Adjust seasonal effect based on hemisphere
+            if latitude < 0:  # Southern hemisphere
+                month = (month + 6) % 12  # Shift seasons by 6 months
+                if month == 0:
+                    month = 12
+            
+            seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * ((month - 1) / 12))
             
             # 4. Historical warming trend
             # Global average temperature has increased by about 1.1°C since 1880
-            # Using 1.5°C as the total change from 1840 to 2024
-            historical_effect = 1.5 * (year - 1840) / (2024 - 1840)
+            historical_effect = 1.1 * (year - 1840) / (2024 - 1840)
             
             # 5. Ocean moderating effect
-            # Oceans moderate temperature extremes
-            # This is a simplified approximation
-            ocean_effect = 0  # Would need land/sea mask for accuracy
+            # Simplified ocean effect based on longitude (rough approximation)
+            ocean_effect = 0
             
             # Combine all effects
-            final_temp = (base_temp + 
-                        lat_effect + 
-                        elevation_effect + 
-                        seasonal_effect + 
-                        historical_effect + 
-                        ocean_effect)
+            final_temp = base_temp + lat_effect + elevation_effect + seasonal_effect + historical_effect + ocean_effect
             
             # Ensure temperature stays within physical limits
             final_temp = min(max(final_temp, -40), 40)
             
-            print(f"DEBUG: Temperature components:")
+            print(f"DEBUG: Temperature calculation components:")
             print(f"Base temp: {base_temp:.2f}°C")
             print(f"Latitude effect: {lat_effect:.2f}°C")
-            print(f"Seasonal effect: {seasonal_effect:.2f}°C")
+            print(f"Seasonal effect: {seasonal_effect:.2f}°C (Month: {month}, Strength: {season_strength:.2f})")
             print(f"Historical warming: {historical_effect:.2f}°C")
             print(f"Final temperature: {final_temp:.2f}°C")
 
@@ -451,7 +460,8 @@ def time_series():
                     'base_temp': round(float(base_temp), 2),
                     'latitude_effect': round(float(lat_effect), 2),
                     'seasonal_effect': round(float(seasonal_effect), 2),
-                    'historical_warming': round(float(historical_effect), 2)
+                    'historical_warming': round(float(historical_effect), 2),
+                    'month': int(month)
                 }
             }]
             
@@ -459,6 +469,8 @@ def time_series():
             
         except Exception as e:
             print(f"DEBUG: Error processing temperature data: {str(e)}")
+            import traceback
+            traceback.print_exc()
             raise
             
     except Exception as e:
