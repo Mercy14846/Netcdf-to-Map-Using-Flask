@@ -1,5 +1,6 @@
 /* Main container styles */
-body {
+html, body {
+    height: 100%;
     margin: 0;
     padding: 0;
     font-family: 'Arial', sans-serif;
@@ -77,12 +78,9 @@ body {
 /* Legend styles */
 .legend {
     background: white;
-    padding: 12px 15px;
-    border-radius: 4px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    min-width: 280px;
-    max-width: 320px;
-    margin: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
 }
 
 .legend-title {
@@ -101,25 +99,19 @@ body {
 }
 
 .gradient-bar {
-    height: 12px;
-    border-radius: 2px;
-    margin: 5px 0;
-    position: relative;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    width: 20px;
+    height: 200px;
+    margin-right: 10px;
 }
 
 .temp-labels {
     position: relative;
-    height: 20px;
-    margin-top: 5px;
+    height: 200px;
 }
 
 .temp-label {
     position: absolute;
     transform: translateX(-50%);
-    font-size: 11px;
-    color: #666;
-    font-weight: 500;
     white-space: nowrap;
 }
 
@@ -332,4 +324,45 @@ body {
     .custom-popup .temp-icon {
         font-size: 20px;
     }
+}
+
+.time-control-panel {
+    background: white;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+}
+
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.error-message {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ff6b6b;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    display: none;
+    z-index: 1000;
+}
+
+.temp-tooltip {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 14px;
 } 
