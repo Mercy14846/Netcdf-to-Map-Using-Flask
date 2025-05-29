@@ -3,60 +3,23 @@ let currentYear = 2024;  // Fixed to 2024
 let heatmapLayer = null;
 let currentTooltip = null;
 
-// Custom heat layer with willReadFrequently set to true
-L.HeatLayer = L.HeatLayer.extend({
-    _initCanvas: function () {
-        let canvas = L.DomUtil.create('canvas', 'leaflet-heatmap-layer');
-        
-        // Initialize with default size
-        canvas.width = 100;
-        canvas.height = 100;
-        
-        let animated = this._map.options.zoomAnimation && L.Browser.any3d;
-        L.DomUtil.addClass(canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+// Create a custom canvas factory that sets willReadFrequently
+const createCanvas = function() {
+    const canvas = document.createElement('canvas');
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.pointerEvents = 'none';
+    return canvas;
+};
 
-        // Set willReadFrequently to true for better performance
-        this._canvas = canvas;
-        this._ctx = canvas.getContext('2d', { willReadFrequently: true });
-        
-        // Initial size setup
-        this._updateCanvasSize();
-        
-        return canvas;
-    },
-
-    _updateCanvasSize: function () {
-        if (this._map && this._canvas) {
-            let size = this._map.getSize();
-            this._canvas.width = size.x;
-            this._canvas.height = size.y;
-            this._width = this._canvas.width;
-            this._height = this._canvas.height;
-            this._draw();
-        }
-    },
-
-    onAdd: function (map) {
-        this._map = map;
-        if (!this._canvas) {
-            this._initCanvas();
-        }
-
-        map._panes.overlayPane.appendChild(this._canvas);
-
-        map.on('moveend', this._reset, this);
-        map.on('resize', this._updateCanvasSize, this);
-
-        if (map.options.zoomAnimation && L.Browser.any3d) {
-            map.on('zoomanim', this._animateZoom, this);
-        }
-
-        this._reset();
-    }
-});
-
-L.heatLayer = function (latlngs, options) {
-    return new L.HeatLayer(latlngs, options);
+// Extend the original heat layer's _initCanvas method
+const originalInitCanvas = L.HeatLayer.prototype._initCanvas;
+L.HeatLayer.prototype._initCanvas = function() {
+    const canvas = originalInitCanvas.call(this);
+    // Set willReadFrequently to true for better performance
+    this._ctx = canvas.getContext('2d', { willReadFrequently: true });
+    return canvas;
 };
 
 // Initialize the map with better default view
