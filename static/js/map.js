@@ -1,7 +1,7 @@
 // Initialize the map with better default view
 const map = L.map('map', {
     center: [20, 0],  // Center map at equator
-    zoom: 3,         // Default zoom level similar to OpenWeatherMap
+    zoom: 3,         // Default zoom level
     zoomControl: false,
     minZoom: 2,      // Restrict minimum zoom
     maxZoom: 18      // Maximum zoom level
@@ -11,110 +11,30 @@ const map = L.map('map', {
 const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap contributors'
-});
+}).addTo(map);
 
-const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-});
-
-// Set default base layer
-osmLayer.addTo(map);
-
-// Create temperature layer with improved options
+// Initialize variables
+let currentYear = 1840;
+let isPlaying = false;
+let playInterval = null;
 let heatmapLayer = null;
-let legendControl = null;
+let currentTooltip = null;
 
-// Create layer controls in OpenWeatherMap style
-const layerControl = L.control({position: 'topleft'});
-layerControl.onAdd = function (map) {
-    const div = L.DomUtil.create('div', 'layer-control');
-    div.innerHTML = `
-        <div class="layer-button">
-            <button id="toggleTemp" class="control-button">
-                <i class="fas fa-temperature-high"></i> Temperature
-            </button>
-        </div>
-    `;
-    return div;
-};
-layerControl.addTo(map);
-
-// Extend L.Canvas to set willReadFrequently
-const CanvasLayer = L.Canvas.extend({
-    _initContainer: function() {
-        L.Canvas.prototype._initContainer.call(this);
-        this._ctx.canvas.setAttribute('willReadFrequently', 'true');
+// Initialize heatmap layer
+heatmapLayer = L.heatLayer([], {
+    radius: 25,
+    blur: 15,
+    maxZoom: 10,
+    max: 1.0,
+    gradient: {
+        0.0: '#0000FF',  // Very Cold (-40°C)
+        0.2: '#00FFFF',  // Cold
+        0.4: '#00FF00',  // Cool
+        0.6: '#FFFF00',  // Mild
+        0.8: '#FFA500',  // Warm
+        1.0: '#FF0000'   // Hot (40°C)
     }
-});
-
-// Define the color gradient stops
-const colorGradient = {
-    0.0: '#91003f',  // Deep purple (Very cold)
-    0.1: '#7f1f7f',  // Purple
-    0.2: '#4c2c9b',  // Blue-purple
-    0.3: '#1f3b9b',  // Dark blue
-    0.4: '#2f7eb6',  // Medium blue
-    0.5: '#40b6e5',  // Light blue
-    0.6: '#6be5bf',  // Turquoise
-    0.7: '#8fef73',  // Light green
-    0.8: '#efef45',  // Yellow
-    0.9: '#ef4524',  // Red
-    1.0: '#cc0000'   // Deep red (Very hot)
-};
-
-// Create legend control
-function createLegend(min, max, segments) {
-    if (legendControl) {
-        map.removeControl(legendControl);
-    }
-
-    legendControl = L.control({position: 'bottomright'});
-    legendControl.onAdd = function (map) {
-        const div = L.DomUtil.create('div', 'info legend');
-        
-        // Create legend title
-        div.innerHTML = '<div class="legend-title">Temperature (°C)</div>';
-        div.innerHTML += '<div class="legend-container">';
-        
-        // Create continuous gradient bar
-        const gradientBar = document.createElement('div');
-        gradientBar.className = 'gradient-bar';
-        
-        // Create gradient background
-        const stops = Object.entries(colorGradient)
-            .map(([pos, color]) => `${color} ${pos * 100}%`)
-            .join(', ');
-        gradientBar.style.background = `linear-gradient(to right, ${stops})`;
-        
-        div.appendChild(gradientBar);
-
-        // Add temperature labels
-        const labelContainer = document.createElement('div');
-        labelContainer.className = 'temp-labels';
-        
-        // Add labels for each segment
-        segments.forEach((segment, index) => {
-            const label = document.createElement('span');
-            label.className = 'temp-label';
-            label.style.left = `${(index / (segments.length - 1)) * 100}%`;
-            label.textContent = `${Math.round(segment.start)}°`;
-            labelContainer.appendChild(label);
-        });
-        
-        // Add the final label
-        const finalLabel = document.createElement('span');
-        finalLabel.className = 'temp-label';
-        finalLabel.style.left = '100%';
-        finalLabel.textContent = `${Math.round(max)}°`;
-        labelContainer.appendChild(finalLabel);
-        
-        div.appendChild(labelContainer);
-        div.innerHTML += '</div>';
-        
-        return div;
-    };
-    legendControl.addTo(map);
-}
+}).addTo(map);
 
 // Add loading indicator functions
 function showLoading() {
@@ -130,31 +50,162 @@ function showError(message) {
     const errorDiv = document.getElementById('error-message');
     errorDiv.textContent = message;
     errorDiv.style.display = 'block';
-    
-    // Clear the chart
-    if (window.annotations) {
-        window.annotations.selectAll("*").remove();
-    }
-    if (window.chartArea) {
-        window.chartArea.selectAll("*").remove();
-    }
-    if (window.svg) {
-        window.svg.selectAll(".label").remove();
-    }
-    
-    // Clear temperature display
-    document.getElementById('temp-update').textContent = '--';
+    setTimeout(() => {
+        errorDiv.style.display = 'none';
+    }, 5000);
 }
 
 function clearError() {
     const errorDiv = document.getElementById('error-message');
     errorDiv.style.display = 'none';
-    errorDiv.textContent = '';
 }
 
-// Fetch heatmap data and initialize the layer
-showLoading();
-fetch('/api/heatmap-data')
+// Update heatmap data
+function updateHeatmap() {
+    showLoading();
+    console.log('Fetching heatmap data for year:', currentYear);
+    
+    fetch('/api/heatmap-data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            year: currentYear,
+            bounds: {
+                _southWest: map.getBounds().getSouthWest(),
+                _northEast: map.getBounds().getNorthEast()
+            },
+            zoom: map.getZoom()
+        })
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) throw new Error(data.error);
+        console.log('Received data points:', data.data.length);
+        
+        // Transform data for heatmap
+        const points = data.data.map(point => [
+            point.lat,
+            point.lon,
+            (point.temperature + 40) / 80  // Normalize temperature to 0-1
+        ]);
+        
+        console.log('Processed points:', points.length);
+        if (points.length > 0) {
+            console.log('Sample point:', points[0]);
+        }
+        
+        // Remove existing layer and create new one
+        if (heatmapLayer) {
+            map.removeLayer(heatmapLayer);
+        }
+        
+        heatmapLayer = L.heatLayer(points, {
+            radius: 25,
+            blur: 15,
+            maxZoom: 10,
+            max: 1.0,
+            gradient: {
+                0.0: '#0000FF',  // Very Cold (-40°C)
+                0.2: '#00FFFF',  // Cold
+                0.4: '#00FF00',  // Cool
+                0.6: '#FFFF00',  // Mild
+                0.8: '#FFA500',  // Warm
+                1.0: '#FF0000'   // Hot (40°C)
+            }
+        }).addTo(map);
+        
+        hideLoading();
+    })
+    .catch(error => {
+        console.error('Error updating heatmap:', error);
+        showError('Failed to update temperature data');
+        hideLoading();
+    });
+}
+
+// Time controls
+const yearSlider = document.getElementById('year-slider');
+const currentYearDisplay = document.getElementById('current-year');
+const playPauseBtn = document.getElementById('play-pause');
+const prevYearBtn = document.getElementById('prev-year');
+const nextYearBtn = document.getElementById('next-year');
+
+function updateYear(year) {
+    currentYear = year;
+    currentYearDisplay.textContent = year;
+    yearSlider.value = year;
+    updateHeatmap();
+}
+
+function togglePlayPause() {
+    isPlaying = !isPlaying;
+    playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
+
+    if (isPlaying) {
+        playInterval = setInterval(() => {
+            let nextYear = parseInt(currentYear) + 1;
+            if (nextYear > 2024) {
+                nextYear = 1840;
+            }
+            updateYear(nextYear);
+        }, 1000);
+    } else {
+        clearInterval(playInterval);
+    }
+}
+
+// Event listeners
+yearSlider.addEventListener('input', (e) => updateYear(parseInt(e.target.value)));
+playPauseBtn.addEventListener('click', togglePlayPause);
+prevYearBtn.addEventListener('click', () => updateYear(Math.max(1840, currentYear - 1)));
+nextYearBtn.addEventListener('click', () => updateYear(Math.min(2024, currentYear + 1)));
+
+// Map event listeners
+map.on('moveend', updateHeatmap);
+map.on('zoomend', updateHeatmap);
+
+// Temperature tooltip
+let followTooltip = L.tooltip({
+    permanent: false,
+    direction: 'top',
+    offset: [0, -20],
+    className: 'temp-tooltip'
+});
+
+// Throttle function
+function throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    }
+}
+
+// Handle mousemove on map
+map.on('mousemove', throttle(function(e) {
+    if (map.getZoom() < 4) return; // Only show tooltip at closer zoom levels
+
+    fetch('/time-series', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+            latitude: parseFloat(e.latlng.lat.toFixed(6)),
+            longitude: parseFloat(e.latlng.lng.toFixed(6)),
+            year: parseInt(currentYear)
+        })
+    })
     .then(response => {
         if (!response.ok) {
             throw new Error('Network response was not ok');
@@ -162,251 +213,40 @@ fetch('/api/heatmap-data')
         return response.json();
     })
     .then(data => {
-        if (data.error) {
-            throw new Error(data.error);
+        if (data.error) throw new Error(data.error);
+        
+        const timeSeriesData = data.data[0];
+        const temp = timeSeriesData.temperature;
+        
+        // Update tooltip content and position
+        followTooltip
+            .setContent(`${temp.toFixed(1)}°C`)
+            .setLatLng(e.latlng);
+        
+        if (!map.hasLayer(followTooltip)) {
+            followTooltip.addTo(map);
         }
-
-        // Calculate optimal radius based on data resolution
-        const latRes = data.resolution.lat;
-        const lonRes = data.resolution.lon;
-        const avgRes = (latRes + lonRes) / 2;
-        const baseRadius = Math.max(5, Math.ceil(1 / avgRes));
-
-        // Create heatmap layer with custom configuration
-        heatmapLayer = new L.HeatLayer(data.data, {
-            radius: baseRadius,
-            minOpacity: 0.35,
-            gradient: colorGradient,
-        }).addTo(map);
-
-        // Set map bounds based on data extent with some padding
-        const latPad = (data.bounds.lat[1] - data.bounds.lat[0]) * 0.1;
-        const lonPad = (data.bounds.lon[1] - data.bounds.lon[0]) * 0.1;
-        map.fitBounds([
-            [data.bounds.lat[0] - latPad, data.bounds.lon[0] - lonPad],
-            [data.bounds.lat[1] + latPad, data.bounds.lon[1] + lonPad]
-        ]);
-
-        // Create legend with segments
-        createLegend(data.min, data.max, data.segments);
-
-        // Set up toggle button
-        const toggleButton = document.getElementById('toggleTemp');
-        let isVisible = true;
-
-        toggleButton.addEventListener('click', () => {
-            if (isVisible) {
-                map.removeLayer(heatmapLayer);
-                toggleButton.classList.remove('active');
-            } else {
-                heatmapLayer.addTo(map);
-                toggleButton.classList.add('active');
-            }
-            isVisible = !isVisible;
-        });
-
-        // Initially activate the button
-        toggleButton.classList.add('active');
     })
     .catch(error => {
-        console.error('Error loading heatmap data:', error);
-        showError('Failed to load temperature data. Please try refreshing the page.');
-    })
-    .finally(() => {
-        hideLoading();
+        console.error('Error:', error);
+        if (map.hasLayer(followTooltip)) {
+            map.removeLayer(followTooltip);
+        }
     });
+}, 100));
 
-// Create layer control panel
-const controlPanel = L.control({position: 'topright'});
-
-controlPanel.onAdd = function (map) {
-    const div = L.DomUtil.create('div', 'control-panel');
-    div.innerHTML = `
-        <h3>Layers</h3>
-        <div class="layer-control">
-            <div class="layer-item">
-                <input type="radio" id="osm" name="base-layer" value="osm" checked>
-                <label for="osm">OpenStreetMap</label>
-            </div>
-            <div class="layer-item">
-                <input type="radio" id="satellite" name="base-layer" value="satellite">
-                <label for="satellite">Satellite</label>
-            </div>
-            <div class="layer-item">
-                <input type="checkbox" id="temp-layer" checked>
-                <label for="temp-layer">Temperature</label>
-            </div>
-        </div>
-        <div class="opacity-control">
-            <strong>Layer Opacity</strong><br>
-            <input type="range" class="opacity-slider" min="0" max="1" step="0.1" value="0.7">
-        </div>
-    `;
-
-    // Add event listeners
-    setTimeout(() => {
-        const osmRadio = div.querySelector('#osm');
-        const satelliteRadio = div.querySelector('#satellite');
-        const tempCheckbox = div.querySelector('#temp-layer');
-        const opacitySlider = div.querySelector('.opacity-slider');
-
-        osmRadio.addEventListener('change', () => {
-            map.removeLayer(satelliteLayer);
-            map.addLayer(osmLayer);
-        });
-
-        satelliteRadio.addEventListener('change', () => {
-            map.removeLayer(osmLayer);
-            map.addLayer(satelliteLayer);
-        });
-
-        tempCheckbox.addEventListener('change', () => {
-            if (tempCheckbox.checked && heatmapLayer) {
-                heatmapLayer.addTo(map);
-            } else if (heatmapLayer) {
-                map.removeLayer(heatmapLayer);
-            }
-        });
-
-        opacitySlider.addEventListener('input', (e) => {
-            if (heatmapLayer) {
-                heatmapLayer.setOptions({ opacity: e.target.value });
-            }
-        });
-    }, 0);
-
-    return div;
-};
-
-controlPanel.addTo(map);
-
-// Add scale control in bottom left
-L.control.scale({position: 'bottomleft'}).addTo(map);
-
-// Add zoom control in bottom left
-L.control.zoom({position: 'bottomleft'}).addTo(map);
-
-// Enhanced click handling for temperature data
-map.on('click', async function(e) {
-    clearError();
-    const lat = e.latlng.lat.toFixed(4);
-    const lng = e.latlng.lng.toFixed(4);
-    
-    // Update coordinates display
-    document.getElementById('lat-update').textContent = 
-        (Math.abs(e.latlng.lat).toFixed(2)) + "°" + (e.latlng.lat >= 0 ? 'N' : 'S');
-    document.getElementById('lon-update').textContent = 
-        (Math.abs(e.latlng.lng).toFixed(2)) + "°" + (e.latlng.lng >= 0 ? 'E' : 'W');
-    
-    // Show loading state
-    document.getElementById('temp-update').textContent = 'Loading...';
-    showLoading();
-    
-    try {
-        const response = await fetch('/time-series', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                latitude: lat,
-                longitude: lng
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        if (!data.data || !Array.isArray(data.data)) {
-            throw new Error('Invalid data format received from server');
-        }
-        
-        timeSeriesData = data.data;
-        
-        if (timeSeriesData.length > 0) {
-            const latestTemp = timeSeriesData[timeSeriesData.length - 1].temperature;
-            if (typeof latestTemp === 'number' && !isNaN(latestTemp)) {
-                document.getElementById('temp-update').textContent = latestTemp.toFixed(2) + '°C';
-            } else {
-                document.getElementById('temp-update').textContent = 'N/A';
-            }
-        } else {
-            document.getElementById('temp-update').textContent = 'No data';
-        }
-        
-        plotData(timeSeriesData, e.latlng);
-    } catch (error) {
-        console.error('Error details:', error);
-        showError(error.message);
-        document.getElementById('temp-update').textContent = '--';
-    } finally {
-        hideLoading();
+// Remove tooltip when mouse leaves map
+map.on('mouseout', function() {
+    if (map.hasLayer(followTooltip)) {
+        map.removeLayer(followTooltip);
     }
 });
 
-// Function to get color based on temperature using gradient interpolation
-function getColor(temp) {
-    // Define color stops for the gradient with brighter colors
-    const colorStops = [
-        { temp: -40, color: '#0000FF' },  // Bright Blue (Very cold)
-        { temp: -30, color: '#00FFFF' },  // Cyan
-        { temp: -20, color: '#00FF90' },  // Bright Turquoise
-        { temp: -10, color: '#00FF00' },  // Bright Green
-        { temp: -5, color: '#80FF00' },   // Lime Green
-        { temp: 0, color: '#FFFF00' },    // Bright Yellow
-        { temp: 5, color: '#FFC000' },    // Bright Orange
-        { temp: 10, color: '#FF8000' },   // Dark Orange
-        { temp: 15, color: '#FF4000' },   // Light Red
-        { temp: 20, color: '#FF0000' },   // Pure Red
-        { temp: 25, color: '#FF0040' },   // Red-Pink
-        { temp: 30, color: '#FF0080' },   // Bright Pink
-        { temp: 35, color: '#FF00FF' },   // Magenta
-        { temp: 40, color: '#800080' }    // Purple
-    ];
+// Add scale control
+L.control.scale({position: 'bottomleft'}).addTo(map);
 
-    // Find the color stops between which the temperature falls
-    for (let i = 0; i < colorStops.length - 1; i++) {
-        if (temp <= colorStops[i + 1].temp) {
-            const t = (temp - colorStops[i].temp) / (colorStops[i + 1].temp - colorStops[i].temp);
-            return interpolateColor(colorStops[i].color, colorStops[i + 1].color, t);
-        }
-    }
-    return colorStops[colorStops.length - 1].color;
-}
+// Add zoom control
+L.control.zoom({position: 'bottomleft'}).addTo(map);
 
-// Helper function to interpolate between two colors
-function interpolateColor(color1, color2, t) {
-    // Convert hex to RGB
-    const rgb1 = hexToRgb(color1);
-    const rgb2 = hexToRgb(color2);
-    
-    // Interpolate each component
-    const r = Math.round(rgb1.r + (rgb2.r - rgb1.r) * t);
-    const g = Math.round(rgb1.g + (rgb2.g - rgb1.g) * t);
-    const b = Math.round(rgb1.b + (rgb2.b - rgb1.b) * t);
-    
-    // Convert back to hex
-    return rgbToHex(r, g, b);
-}
-
-// Helper function to convert hex to RGB
-function hexToRgb(hex) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-    } : null;
-}
-
-// Helper function to convert RGB to hex
-function rgbToHex(r, g, b) {
-    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-}
+// Initial update
+updateHeatmap();
