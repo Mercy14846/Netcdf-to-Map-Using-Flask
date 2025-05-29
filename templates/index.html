@@ -11,6 +11,9 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
+    <!-- Leaflet.heat -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
@@ -157,28 +160,21 @@
         let currentTooltip = null;
         let tooltipLayer = L.layerGroup().addTo(map);
 
-        // Configure heatmap
-        const heatmapConfig = {
-            "radius": 0.5,
-            "maxOpacity": 0.8,
-            "scaleRadius": true,
-            "useLocalExtrema": false,
-            "latField": 'lat',
-            "lngField": 'lng',
-            "valueField": 'temp',
+        // Initialize heatmap layer
+        heatmapLayer = L.heatLayer([], {
+            radius: 25,
+            blur: 15,
+            maxZoom: 10,
+            max: 1.0,
             gradient: {
-                '0.0': '#0000FF',  // Very Cold (-40°C)
-                '0.2': '#00FFFF',  // Cold
-                '0.4': '#00FF00',  // Cool
-                '0.6': '#FFFF00',  // Mild
-                '0.8': '#FFA500',  // Warm
-                '1.0': '#FF0000'   // Hot (40°C)
+                0.0: '#0000FF',  // Very Cold (-40°C)
+                0.2: '#00FFFF',  // Cold
+                0.4: '#00FF00',  // Cool
+                0.6: '#FFFF00',  // Mild
+                0.8: '#FFA500',  // Warm
+                1.0: '#FF0000'   // Hot (40°C)
             }
-        };
-
-        // Create heatmap layer
-        heatmapLayer = new HeatmapOverlay(heatmapConfig);
-        heatmapLayer.addTo(map);
+        }).addTo(map);
 
         function updateHeatmap() {
             fetch('/api/heatmap-data', {
@@ -189,7 +185,10 @@
                 },
                 body: JSON.stringify({
                     year: currentYear,
-                    bounds: map.getBounds(),
+                    bounds: {
+                        _southWest: map.getBounds().getSouthWest(),
+                        _northEast: map.getBounds().getNorthEast()
+                    },
                     zoom: map.getZoom()
                 })
             })
@@ -197,25 +196,19 @@
             .then(data => {
                 if (data.error) throw new Error(data.error);
                 
-                // Normalize temperatures to 0-1 range for heatmap
-                const points = data.data.map(point => ({
-                    lat: point.lat,
-                    lng: point.lon,
-                    temp: (point.temperature + 40) / 80  // Convert -40 to 40 range to 0-1
-                }));
+                // Transform data for heatmap
+                const points = data.data.map(point => [
+                    point.lat,
+                    point.lon,
+                    (point.temperature + 40) / 80  // Normalize temperature to 0-1
+                ]);
 
-                heatmapLayer.setData({
-                    max: 1,
-                    min: 0,
-                    data: points
-                });
+                heatmapLayer.setLatLngs(points);
             })
-            .catch(error => console.error('Error updating heatmap:', error));
+            .catch(error => {
+                console.error('Error updating heatmap:', error);
+            });
         }
-
-        // Update heatmap on map move/zoom
-        map.on('moveend', updateHeatmap);
-        map.on('zoomend', updateHeatmap);
 
         // Create a tooltip that follows the mouse
         let followTooltip = L.tooltip({

@@ -333,11 +333,14 @@ def get_heatmap_data():
         bounds = request_data.get('bounds', {})
         zoom = request_data.get('zoom', 2)
 
-        # Get bounds
-        south = float(bounds.get('_southWest', {}).get('lat', lat_array.min()))
-        north = float(bounds.get('_northEast', {}).get('lat', lat_array.max()))
-        west = float(bounds.get('_southWest', {}).get('lng', lon_array.min()))
-        east = float(bounds.get('_northEast', {}).get('lng', lon_array.max()))
+        # Get bounds with default values
+        south = float(bounds.get('_southWest', {}).get('lat', -90))
+        north = float(bounds.get('_northEast', {}).get('lat', 90))
+        west = float(bounds.get('_southWest', {}).get('lng', -180))
+        east = float(bounds.get('_northEast', {}).get('lng', 180))
+
+        # Print debug information
+        print(f"DEBUG: Processing request for bounds: N={north}, S={south}, E={east}, W={west}, zoom={zoom}")
 
         # Adjust resolution based on zoom level
         if zoom < 3:
@@ -354,6 +357,8 @@ def get_heatmap_data():
         # Sample points based on step size
         lats = lat_array[lat_mask][::step]
         lons = lon_array[lon_mask][::step]
+
+        print(f"DEBUG: Found {len(lats)} latitude points and {len(lons)} longitude points")
 
         points = []
         for lat in lats:
@@ -372,6 +377,8 @@ def get_heatmap_data():
                 except Exception as e:
                     print(f"Error calculating temperature for point ({lat}, {lon}): {str(e)}")
                     continue
+
+        print(f"DEBUG: Generated {len(points)} data points")
 
         return jsonify({
             'data': points,
