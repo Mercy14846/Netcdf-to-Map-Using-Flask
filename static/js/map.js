@@ -9,7 +9,7 @@ const map = L.map('map', {
     zoom: 4,         // Default zoom level
     zoomControl: false,
     minZoom: 2,      // Restrict minimum zoom
-    maxZoom: 18      // Maximum zoom level
+    maxZoom: 8     // Maximum zoom level
 });
 
 // Add multiple base layers
