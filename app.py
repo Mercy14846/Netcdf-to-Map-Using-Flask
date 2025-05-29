@@ -51,8 +51,21 @@ def load_data():
         print("\nDEBUG: Starting data loading process...")
         
         # Load the datasets with chunking for better memory management
-        data = xr.open_dataset("static/data/temp_2m.nc", chunks={'latitude': 100, 'longitude': 100})
-        time_data = xr.open_dataset("static/data/temperature.nc", chunks={'time': 100})
+        try:
+            data = xr.open_dataset("static/data/temp_2m.nc", chunks={'latitude': 100, 'longitude': 100})
+            print("DEBUG: Successfully loaded temp_2m.nc")
+            print("DEBUG: temp_2m.nc structure:", data)
+        except Exception as e:
+            print(f"ERROR loading temp_2m.nc: {str(e)}")
+            raise
+            
+        try:
+            time_data = xr.open_dataset("static/data/temperature.nc", chunks={'time': 100})
+            print("DEBUG: Successfully loaded temperature.nc")
+            print("DEBUG: temperature.nc structure:", time_data)
+        except Exception as e:
+            print(f"ERROR loading temperature.nc: {str(e)}")
+            raise
         
         print("DEBUG: Available variables in temp_2m.nc:", list(data.data_vars))
         print("DEBUG: Available variables in temperature.nc:", list(time_data.data_vars))
@@ -63,31 +76,56 @@ def load_data():
         
         if temp_var is None:
             print("DEBUG: Could not find standard temperature variable, using first available")
-            temp_var = list(data.data_vars)[0]
+            if len(data.data_vars) > 0:
+                temp_var = list(data.data_vars)[0]
+                print(f"DEBUG: Using variable: {temp_var}")
+            else:
+                raise ValueError("No variables found in temp_2m.nc")
         
         print(f"DEBUG: Selected temperature variable: {temp_var}")
         
-        # Calculate min/max values
-        data_values = data[temp_var].values
-        min_val = float(np.nanmin(data_values))
-        max_val = float(np.nanmax(data_values))
-        
-        # Extract dimensions
-        lon_array = data['longitude']
-        lat_array = data['latitude']
-        data_array = data[temp_var]
+        try:
+            # Calculate min/max values
+            data_values = data[temp_var].values
+            print("DEBUG: Shape of temperature data:", data_values.shape)
+            print("DEBUG: Sample of temperature values:", data_values.flatten()[:10])
+            
+            min_val = float(np.nanmin(data_values))
+            max_val = float(np.nanmax(data_values))
+            print(f"DEBUG: Temperature range: {min_val} to {max_val}")
+            
+            # Extract dimensions
+            lon_array = data['longitude']
+            lat_array = data['latitude']
+            print("DEBUG: Longitude range:", float(lon_array.min()), "to", float(lon_array.max()))
+            print("DEBUG: Latitude range:", float(lat_array.min()), "to", float(lat_array.max()))
+            
+            data_array = data[temp_var]
+        except Exception as e:
+            print(f"ERROR processing temperature data: {str(e)}")
+            raise
         
         # Extract time series data
-        time_vars = ['tmin', 'temperature']
-        time_data_var = next((time_data[var] for var in time_vars if var in time_data.data_vars), None)
-        
-        if time_data_var is None:
-            time_data_var = time_data[list(time_data.data_vars)[0]]
+        try:
+            time_vars = ['tmin', 'temperature']
+            time_data_var = next((time_data[var] for var in time_vars if var in time_data.data_vars), None)
+            
+            if time_data_var is None:
+                if len(time_data.data_vars) > 0:
+                    time_data_var = time_data[list(time_data.data_vars)[0]]
+                    print(f"DEBUG: Using time variable: {list(time_data.data_vars)[0]}")
+                else:
+                    raise ValueError("No variables found in temperature.nc")
+        except Exception as e:
+            print(f"ERROR processing time data: {str(e)}")
+            raise
             
         print("DEBUG: Data loading completed successfully")
             
     except Exception as e:
         print(f"Error loading data: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
 
 # Initialize data at startup
