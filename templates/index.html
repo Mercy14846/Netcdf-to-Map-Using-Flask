@@ -148,11 +148,81 @@
                 bottom: 20px;
             }
         }
+
+        .temp-legend {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 12px;
+            max-width: 200px;
+        }
+
+        .temp-legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .temp-scale {
+            height: 20px;
+            width: 180px;
+            margin-bottom: 5px;
+            background: linear-gradient(to right,
+                #0000FF,  /* -40°C */
+                #00FFFF,  /* -30°C */
+                #00FF90,  /* -20°C */
+                #00FF00,  /* -10°C */
+                #80FF00,  /* -5°C */
+                #FFFF00,  /* 0°C */
+                #FFC000,  /* 5°C */
+                #FF8000,  /* 10°C */
+                #FF4000,  /* 15°C */
+                #FF0000,  /* 20°C */
+                #FF0040,  /* 25°C */
+                #FF0080,  /* 30°C */
+                #FF00FF,  /* 35°C */
+                #800080   /* 40°C */
+            );
+        }
+
+        .temp-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2px;
+            font-size: 10px;
+        }
+
+        .temp-stats {
+            margin-top: 10px;
+            font-size: 11px;
+            line-height: 1.4;
+        }
     </style>
   </head>
   <body>
     <!-- Map container -->
     <div id="map">
+        <!-- Temperature Legend -->
+        <div class="temp-legend">
+            <h4>Temperature Scale</h4>
+            <div class="temp-scale"></div>
+            <div class="temp-labels">
+                <span>-40°C</span>
+                <span>0°C</span>
+                <span>40°C</span>
+            </div>
+            <div class="temp-stats">
+                <div>Current Location: <span id="current-location">-</span></div>
+                <div>Temperature: <span id="current-temp">-</span></div>
+                <div>Year: <span id="legend-year">1840</span></div>
+            </div>
+        </div>
+
         <div class="loading-overlay" id="loading-overlay">
             <div class="loading-spinner"></div>
         </div>
@@ -229,6 +299,29 @@
                    latlng.lng <= bounds.lon.max;
         }
 
+        function updateLegendStats(data) {
+            if (!data) return;
+            
+            const locationSpan = document.getElementById('current-location');
+            const tempSpan = document.getElementById('current-temp');
+            const yearSpan = document.getElementById('legend-year');
+            
+            if (data.latitude && data.longitude) {
+                const lat = Math.abs(data.latitude).toFixed(2) + '°' + (data.latitude >= 0 ? 'N' : 'S');
+                const lon = Math.abs(data.longitude).toFixed(2) + '°' + (data.longitude >= 0 ? 'E' : 'W');
+                locationSpan.textContent = `${lat}, ${lon}`;
+            }
+            
+            if (data.temperature) {
+                const temp = typeof data.temperature === 'number' ? data.temperature.toFixed(1) : data.temperature;
+                tempSpan.textContent = `${temp}°C`;
+            }
+            
+            if (data.year) {
+                yearSpan.textContent = data.year;
+            }
+        }
+
         function updateTemperatureDisplay(coords) {
             if (!coords) return;
             
@@ -278,6 +371,14 @@
                         const tempText = temp.toFixed(1) + '°C';
                         popupContent.querySelector('.temp-update').textContent = tempText;
                         updateTempIcon(popupContent, temp);
+                        
+                        // Update legend with current data
+                        updateLegendStats({
+                            latitude: coords.lat,
+                            longitude: coords.lng,
+                            temperature: temp,
+                            year: currentYear
+                        });
                     } else {
                         popupContent.querySelector('.temp-update').textContent = 'N/A';
                         updateTempIcon(popupContent, 0);
@@ -304,6 +405,8 @@
             currentYear = year;
             yearDisplay.textContent = year;
             yearSlider.value = year;
+            document.getElementById('legend-year').textContent = year;
+            
             // Update the map display for the new year
             updateMapDisplay(year);
             

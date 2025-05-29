@@ -385,63 +385,74 @@ def time_series():
         year = int(request_data.get('year', 2024))  # Default to 2024 if not specified
         
         print(f"\nDEBUG: Processing request for lat={latitude}, lon={longitude}, year={year}")
-        print(f"DEBUG: Data array shape: {data_array.shape}")
-        print(f"DEBUG: Available coordinates - Latitude: {lat_array.values.min()} to {lat_array.values.max()}")
-        print(f"DEBUG: Available coordinates - Longitude: {lon_array.values.min()} to {lon_array.values.max()}")
         
         # Validate coordinates are within bounds
         if (latitude < lat_array.min() or latitude > lat_array.max() or
             longitude < lon_array.min() or longitude > lon_array.max()):
             return jsonify(error="Coordinates out of bounds"), 400
 
-        # Get the actual temperature data directly
+        # Get the actual temperature data
         try:
-            # Get the exact data values around the point
+            # Find nearest grid points
             lat_idx = np.abs(lat_array.values - latitude).argmin()
             lon_idx = np.abs(lon_array.values - longitude).argmin()
             
-            print(f"DEBUG: Selected indices - lat_idx={lat_idx}, lon_idx={lon_idx}")
-            print(f"DEBUG: Actual latitude: {lat_array.values[lat_idx]}, longitude: {lon_array.values[lon_idx]}")
+            # Get base temperature from the data
+            base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
             
-            # Get raw temperature value
-            raw_temp = data_array.isel(latitude=lat_idx, longitude=lon_idx).values
-            print(f"DEBUG: Raw temperature from data: {raw_temp}")
+            # Temperature adjustments based on real-world patterns:
             
-            if isinstance(raw_temp, np.ndarray):
-                print(f"DEBUG: Raw temperature is an array with shape: {raw_temp.shape}")
-                raw_temp = float(raw_temp.mean())
+            # 1. Latitude effect: Temperature decreases with distance from equator
+            # Approximately -0.6°C per degree of latitude from equator
+            lat_effect = -0.6 * (abs(latitude) / 90.0) * 20  # Max effect of 20°C at poles
             
-            # Check for NaN or invalid values
-            if np.isnan(raw_temp):
-                print("DEBUG: Warning - Got NaN temperature value!")
-                raw_temp = 15.0  # Default to 15°C if we get a NaN value
+            # 2. Elevation effect (estimated from location)
+            # Rough estimate: -6.5°C per 1000m elevation
+            elevation_effect = 0  # Would need elevation data for more accuracy
             
-            base_temp = float(raw_temp)
-            print(f"DEBUG: Base temperature: {base_temp}")
+            # 3. Seasonal effect (varies with latitude)
+            # Stronger seasonal variation at higher latitudes
+            season_strength = abs(latitude) / 90.0  # 0 at equator, 1 at poles
+            month = ((year % 1) * 12) + 1  # Get month from fractional part of year
+            seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * (month - 1) / 12)
             
-            # Calculate temperature adjustments
-            lat_factor = -0.6 * (abs(latitude) / 90.0)
-            seasonal_amplitude = 15.0 * (abs(latitude) / 90.0)
-            month = (year % 12) + 1
-            seasonal_factor = seasonal_amplitude * np.cos(2 * np.pi * (month - 1) / 12)
-            year_factor = (year - 1840) / (2024 - 1840)
-            historical_warming = 1.5 * year_factor
+            # 4. Historical warming trend
+            # Global average temperature has increased by about 1.1°C since 1880
+            # Using 1.5°C as the total change from 1840 to 2024
+            historical_effect = 1.5 * (year - 1840) / (2024 - 1840)
             
-            print(f"DEBUG: Adjustments - Latitude: {lat_factor}, Seasonal: {seasonal_factor}, Historical: {historical_warming}")
+            # 5. Ocean moderating effect
+            # Oceans moderate temperature extremes
+            # This is a simplified approximation
+            ocean_effect = 0  # Would need land/sea mask for accuracy
             
-            # Combine all factors
-            final_temp = base_temp + lat_factor + seasonal_factor + historical_warming
-            final_temp = min(max(final_temp, -50), 50)  # Limit to reasonable range
+            # Combine all effects
+            final_temp = (base_temp + 
+                        lat_effect + 
+                        elevation_effect + 
+                        seasonal_effect + 
+                        historical_effect + 
+                        ocean_effect)
             
-            print(f"DEBUG: Final temperature: {final_temp}")
+            # Ensure temperature stays within physical limits
+            final_temp = min(max(final_temp, -40), 40)
             
+            print(f"DEBUG: Temperature components:")
+            print(f"Base temp: {base_temp:.2f}°C")
+            print(f"Latitude effect: {lat_effect:.2f}°C")
+            print(f"Seasonal effect: {seasonal_effect:.2f}°C")
+            print(f"Historical warming: {historical_effect:.2f}°C")
+            print(f"Final temperature: {final_temp:.2f}°C")
+
             data = [{
                 'year': year,
                 'temperature': round(float(final_temp), 2),
-                'base_temp': round(float(base_temp), 2),
-                'latitude_effect': round(float(lat_factor), 2),
-                'seasonal_effect': round(float(seasonal_factor), 2),
-                'historical_warming': round(float(historical_warming), 2)
+                'components': {
+                    'base_temp': round(float(base_temp), 2),
+                    'latitude_effect': round(float(lat_effect), 2),
+                    'seasonal_effect': round(float(seasonal_effect), 2),
+                    'historical_warming': round(float(historical_effect), 2)
+                }
             }]
             
             return jsonify({'data': data})
