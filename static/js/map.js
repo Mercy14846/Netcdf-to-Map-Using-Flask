@@ -3,6 +3,32 @@ let currentYear = 2024;  // Fixed to 2024
 let heatmapLayer = null;
 let currentTooltip = null;
 
+// Custom heat layer with willReadFrequently set to true
+L.HeatLayer = L.HeatLayer.extend({
+    _initCanvas: function () {
+        let canvas = L.DomUtil.create('canvas', 'leaflet-heatmap-layer');
+
+        let size = this._map.getSize();
+        canvas.width = size.x;
+        canvas.height = size.y;
+
+        let animated = this._map.options.zoomAnimation && L.Browser.any3d;
+        L.DomUtil.addClass(canvas, 'leaflet-zoom-' + (animated ? 'animated' : 'hide'));
+
+        // Set willReadFrequently to true for better performance
+        this._canvas = canvas;
+        this._ctx = canvas.getContext('2d', { willReadFrequently: true });
+        this._width = canvas.width;
+        this._height = canvas.height;
+
+        return canvas;
+    }
+});
+
+L.heatLayer = function (latlngs, options) {
+    return new L.HeatLayer(latlngs, options);
+};
+
 // Initialize the map with better default view
 const map = L.map('map', {
     center: [20, 0],
