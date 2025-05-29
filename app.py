@@ -160,78 +160,143 @@ def generateatile(zoom, longitude, latitude):
         xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
         xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
 
-        # Convert mercator coordinates back to lat/lon
+        # Convert mercator coordinates back to lat/lon with added buffer
+        buffer_factor = 0.1  # 10% buffer
         xleft = xleft / 20037508.34 * 180
         xright = xright / 20037508.34 * 180
         yleft = math.degrees(2 * math.atan(math.exp(yleft / 20037508.34 * math.pi)) - math.pi/2)
         yright = math.degrees(2 * math.atan(math.exp(yright / 20037508.34 * math.pi)) - math.pi/2)
 
-        print(f"Processing tile: zoom={zoom}, lon={longitude}, lat={latitude}")
-        print(f"Bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
+        # Calculate buffer size based on tile dimensions
+        x_buffer = abs(xright - xleft) * buffer_factor
+        y_buffer = abs(yleft - yright) * buffer_factor
 
-        # Get data for the tile with a small buffer to prevent gaps
-        buffer = 0.1  # Add a small buffer around the tile
+        print(f"DEBUG: Processing tile: zoom={zoom}, lon={longitude}, lat={latitude}")
+        print(f"DEBUG: Original bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
+        print(f"DEBUG: Buffer sizes: x={x_buffer:.6f}, y={y_buffer:.6f}")
+
+        # Get data for the tile with dynamic buffer
         frame = data_array.sel(
-            longitude=slice(min(xleft, xright) - buffer, max(xleft, xright) + buffer),
-            latitude=slice(max(yleft, yright) + buffer, min(yleft, yright) - buffer)
+            longitude=slice(min(xleft, xright) - x_buffer, max(xleft, xright) + x_buffer),
+            latitude=slice(max(yleft, yright) + y_buffer, min(yleft, yright) - y_buffer)
         )
 
         if frame.size == 0:
-            print("No data in selected region")
+            print("DEBUG: No data in selected region")
             return create_empty_tile()
 
-        # Adjust resolution based on zoom level
-        resolution = min(256, 2 ** (zoom + 4))  # Increase resolution at higher zoom levels
+        # Calculate optimal resolution based on zoom level
+        base_resolution = 256  # Base tile size
+        if zoom < 4:
+            resolution = min(base_resolution, 2 ** (zoom + 4))
+        else:
+            resolution = base_resolution * min(2, zoom // 4)  # Increase resolution at higher zooms
         
-        # Create canvas and render data
-        canvas = ds.Canvas(plot_width=resolution, 
-                         plot_height=resolution,
-                         x_range=(xleft, xright),
-                         y_range=(yright, yleft))
+        print(f"DEBUG: Using resolution {resolution} for zoom level {zoom}")
+
+        # Create canvas with calculated resolution
+        canvas = ds.Canvas(
+            plot_width=resolution,
+            plot_height=resolution,
+            x_range=(xleft - x_buffer, xright + x_buffer),
+            y_range=(yright - y_buffer, yleft + y_buffer)
+        )
 
         # Convert data to DataFrame for datashader
         df = frame.to_dataframe().reset_index()
         
-        # Check if we have valid data
         if df.empty or df[temp_var].isna().all():
-            print("No valid temperature data in region")
+            print("DEBUG: No valid temperature data in region")
             return create_empty_tile()
 
-        # Create aggregation using points with dynamic spreading based on zoom
-        agg = canvas.points(df, 
-                          x='longitude', 
-                          y='latitude',
-                          agg=ds.mean(temp_var))
+        # Calculate spread value based on zoom level and data density
+        points_per_pixel = df.shape[0] / (resolution * resolution)
         
-        # Calculate spread value - ensure it's a positive integer
-        spread = int(max(1, min(4, 10 - zoom)))  # Will give values between 1 and 4
-        print(f"Using spread value: {spread} for zoom level: {zoom}")
-        
-        # Apply spreading to fill gaps
-        if spread > 0:  # Only apply spread if it's positive
+        # Adaptive spread calculation
+        if zoom < 4:
+            # More spread at low zoom levels
+            base_spread = 4
+        elif zoom < 8:
+            # Moderate spread at medium zoom levels
+            base_spread = 3
+        else:
+            # Minimal spread at high zoom levels
+            base_spread = 2
+
+        # Adjust spread based on data density
+        if points_per_pixel < 0.1:
+            # Increase spread for sparse data
+            spread = base_spread + 1
+        elif points_per_pixel > 1.0:
+            # Reduce spread for dense data
+            spread = max(1, base_spread - 1)
+        else:
+            spread = base_spread
+
+        print(f"DEBUG: Points per pixel: {points_per_pixel:.3f}, Using spread: {spread}")
+
+        # Create aggregation using points
+        agg = canvas.points(
+            df,
+            x='longitude',
+            y='latitude',
+            agg=ds.mean(temp_var)
+        )
+
+        # Only apply spread if we have valid data and need it
+        if agg is not None and spread > 1:
+            print(f"DEBUG: Applying spread of {spread} pixels")
             agg = ds.tf.spread(agg, px=spread)
-
+        
         if agg is None:
-            print("Aggregation failed")
+            print("DEBUG: Aggregation failed")
             return create_empty_tile()
 
-        # Shade the data with increased contrast
-        img = tf.shade(agg, 
-                      cmap=create_colormap(),
-                      span=[min_val, max_val],
-                      how='linear')
+        # Enhanced shading with dynamic range adjustment
+        min_temp = float(df[temp_var].min())
+        max_temp = float(df[temp_var].max())
+        temp_range = max_temp - min_temp
+
+        # Adjust color range based on data distribution
+        if temp_range < 1.0:
+            # Very small temperature range, center around the mean
+            mean_temp = (max_temp + min_temp) / 2
+            min_temp = mean_temp - 5
+            max_temp = mean_temp + 5
+        else:
+            # Add padding to the range to smooth color transitions
+            padding = temp_range * 0.1
+            min_temp -= padding
+            max_temp += padding
+
+        print(f"DEBUG: Temperature range: {min_temp:.1f}°C to {max_temp:.1f}°C")
+
+        # Shade the data with calculated range
+        img = tf.shade(
+            agg,
+            cmap=create_colormap(),
+            span=[min_temp, max_temp],
+            how='linear'
+        )
         
-        # Convert to RGBA
+        # Convert to RGBA with enhanced alpha channel
         img_data = np.array(img.data)
         
-        # Create alpha channel based on data validity
-        alpha = np.where(np.isnan(agg.values), 0, 255).astype(np.uint8)
+        # Create alpha channel based on data validity and intensity
+        alpha = np.where(np.isnan(agg.values), 0, 255)
+        # Adjust alpha based on value intensity
+        normalized_values = (agg.values - min_temp) / (max_temp - min_temp)
+        alpha = np.where(
+            ~np.isnan(agg.values),
+            np.maximum(100, np.minimum(255, normalized_values * 255)),
+            0
+        ).astype(np.uint8)
         
         # Create final RGBA image with transparency
         rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
-        rgba[..., :3] = img_data[..., :3]  # Copy RGB channels
-        rgba[..., 3] = alpha  # Set alpha channel
-        
+        rgba[..., :3] = img_data[..., :3]
+        rgba[..., 3] = alpha
+
         # Resize to 256x256 if needed
         if resolution != 256:
             pil_img = Image.fromarray(rgba, mode='RGBA')
