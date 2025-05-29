@@ -19,17 +19,18 @@ import threading
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.serving import run_simple
 import sys
+from functools import lru_cache
 
 # Increase recursion limit if needed
 sys.setrecursionlimit(10000)
 
 app = Flask(__name__)
 
-# Configure Flask-Caching with increased timeout
+# Configure Flask-Caching with increased timeout and larger threshold
 cache = Cache(app, config={
     'CACHE_TYPE': 'simple',
     'CACHE_DEFAULT_TIMEOUT': 7200,  # 2 hours
-    'CACHE_THRESHOLD': 1000  # Maximum number of items to store in cache
+    'CACHE_THRESHOLD': 5000  # Store more items in cache
 })
 
 # Global variables for data
@@ -389,6 +390,7 @@ def heatmap_data():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data-extent')
+@cache.cached(timeout=7200)  # Cache for 2 hours
 def get_data_extent():
     """Return the geographical and temporal extent of available data"""
     try:
@@ -416,8 +418,41 @@ def get_data_extent():
         print(f"Error getting data extent: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@lru_cache(maxsize=1024)
+def get_nearest_indices(lat, lon):
+    """Cache the nearest grid point calculations"""
+    lat_idx = np.abs(lat_array.values - lat).argmin()
+    lon_idx = np.abs(lon_array.values - lon).argmin()
+    return lat_idx, lon_idx
+
+def calculate_temperature(base_temp, latitude, year):
+    """Calculate temperature components"""
+    # Latitude effect
+    lat_effect = -0.6 * abs(latitude)
+    
+    # Seasonal effect
+    season_strength = abs(latitude) / 90.0
+    month = ((year - int(year)) * 12) + 1
+    if month > 12:
+        month = 1
+    
+    # Adjust for hemisphere
+    if latitude < 0:
+        month = (month + 6) % 12 or 12
+    
+    seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * ((month - 1) / 12))
+    
+    # Historical warming
+    historical_effect = 1.1 * (year - 1840) / (2024 - 1840)
+    
+    # Calculate final temperature
+    final_temp = base_temp + lat_effect + seasonal_effect + historical_effect
+    
+    # Ensure temperature stays within physical limits
+    return min(max(final_temp, -40), 40)
+
 @app.route('/time-series', methods=['POST'])
-@cache.memoize(timeout=7200)
+@cache.memoize(timeout=300)  # 5 minute cache for mouseover data
 def time_series():
     try:
         request_data = request.get_json()
@@ -434,58 +469,27 @@ def time_series():
             return jsonify(error="Coordinates out of bounds"), 400
 
         try:
-            # Find nearest grid points
-            lat_idx = np.abs(lat_array.values - latitude).argmin()
-            lon_idx = np.abs(lon_array.values - longitude).argmin()
+            # Get nearest grid points (cached)
+            lat_idx, lon_idx = get_nearest_indices(latitude, longitude)
             
             # Get base temperature
             base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
             if np.isnan(base_temp):
                 base_temp = 15.0  # Default temperature if NaN
             
-            # Calculate temperature components
-            lat_effect = -0.6 * abs(latitude)  # Temperature decrease with latitude
+            # Calculate temperature with all effects
+            final_temp = calculate_temperature(base_temp, latitude, year)
             
-            # Seasonal effect
-            season_strength = abs(latitude) / 90.0
-            month = ((year - int(year)) * 12) + 1
-            if month > 12:
-                month = 1
-            
-            # Adjust for hemisphere
-            if latitude < 0:  # Southern hemisphere
-                month = (month + 6) % 12 or 12
-            
-            seasonal_effect = 15 * season_strength * np.cos(2 * np.pi * ((month - 1) / 12))
-            
-            # Historical warming
-            historical_effect = 1.1 * (year - 1840) / (2024 - 1840)
-            
-            # Calculate final temperature
-            final_temp = base_temp + lat_effect + seasonal_effect + historical_effect
-            
-            # Ensure temperature stays within physical limits
-            final_temp = min(max(final_temp, -40), 40)
-
-            data = [{
-                'year': year,
-                'temperature': round(float(final_temp), 1),
-                'components': {
-                    'base_temp': round(float(base_temp), 1),
-                    'latitude_effect': round(float(lat_effect), 1),
-                    'seasonal_effect': round(float(seasonal_effect), 1),
-                    'historical_warming': round(float(historical_effect), 1),
-                    'month': int(month)
-                }
-            }]
-            
-            return jsonify({'data': data})
+            return jsonify({
+                'data': [{
+                    'year': year,
+                    'temperature': round(float(final_temp), 1)
+                }]
+            })
             
         except Exception as e:
-            print(f"DEBUG: Error processing temperature data: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            raise
+            print(f"Error processing temperature data: {str(e)}")
+            return jsonify({'error': str(e)}), 500
             
     except Exception as e:
         print(f"Error in time series endpoint: {str(e)}")
