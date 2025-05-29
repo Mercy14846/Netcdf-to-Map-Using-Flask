@@ -306,18 +306,18 @@
             const tempSpan = document.getElementById('current-temp');
             const yearSpan = document.getElementById('legend-year');
             
-            if (data.latitude && data.longitude) {
+            if (locationSpan && data.latitude && data.longitude) {
                 const lat = Math.abs(data.latitude).toFixed(2) + '°' + (data.latitude >= 0 ? 'N' : 'S');
                 const lon = Math.abs(data.longitude).toFixed(2) + '°' + (data.longitude >= 0 ? 'E' : 'W');
                 locationSpan.textContent = `${lat}, ${lon}`;
             }
             
-            if (data.temperature) {
+            if (tempSpan && data.temperature !== undefined) {
                 const temp = typeof data.temperature === 'number' ? data.temperature.toFixed(1) : data.temperature;
                 tempSpan.textContent = `${temp}°C`;
             }
             
-            if (data.year) {
+            if (yearSpan && data.year) {
                 yearSpan.textContent = data.year;
             }
         }
@@ -328,7 +328,10 @@
             const popupContent = currentPopup ? currentPopup.getContent() : null;
             if (!popupContent) return;
             
-            popupContent.querySelector('.temp-update').textContent = 'Loading...';
+            const tempUpdate = popupContent.querySelector('.temp-update');
+            if (tempUpdate) {
+                tempUpdate.textContent = 'Loading...';
+            }
             
             fetch('/time-series', {
                 method: 'POST',
@@ -369,7 +372,10 @@
                     const temp = timeSeriesData[0].temperature;
                     if (typeof temp === 'number' && !isNaN(temp)) {
                         const tempText = temp.toFixed(1) + '°C';
-                        popupContent.querySelector('.temp-update').textContent = tempText;
+                        const tempUpdateElem = popupContent.querySelector('.temp-update');
+                        if (tempUpdateElem) {
+                            tempUpdateElem.textContent = tempText;
+                        }
                         updateTempIcon(popupContent, temp);
                         
                         // Update legend with current data
@@ -380,11 +386,17 @@
                             year: currentYear
                         });
                     } else {
-                        popupContent.querySelector('.temp-update').textContent = 'N/A';
+                        const tempUpdateElem = popupContent.querySelector('.temp-update');
+                        if (tempUpdateElem) {
+                            tempUpdateElem.textContent = 'N/A';
+                        }
                         updateTempIcon(popupContent, 0);
                     }
                 } else {
-                    popupContent.querySelector('.temp-update').textContent = 'No data';
+                    const tempUpdateElem = popupContent.querySelector('.temp-update');
+                    if (tempUpdateElem) {
+                        tempUpdateElem.textContent = 'No data';
+                    }
                     updateTempIcon(popupContent, 0);
                 }
                 
@@ -461,7 +473,10 @@
         }
 
         function updateTempIcon(container, temperature) {
+            if (!container) return;
             const icon = container.querySelector('.temp-icon');
+            if (!icon) return;
+            
             icon.classList.remove('fa-thermometer-full', 'fa-thermometer-empty', 'hot', 'cold');
             
             if (temperature > 20) {
@@ -472,18 +487,27 @@
         }
 
         function showError(container, message) {
+            if (!container) return;
             const errorDiv = container.querySelector('.error-message');
+            if (!errorDiv) return;
+            
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
             
-            container.querySelector('.temp-update').textContent = '--';
+            const tempUpdate = container.querySelector('.temp-update');
+            if (tempUpdate) {
+                tempUpdate.textContent = '--';
+            }
             updateTempIcon(container, 0);
         }
 
         function clearError(container) {
+            if (!container) return;
             const errorDiv = container.querySelector('.error-message');
-            errorDiv.style.display = 'none';
-            errorDiv.textContent = '';
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
+            }
         }
 
         map.on('click', function(e) {
