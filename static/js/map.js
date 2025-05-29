@@ -1,5 +1,5 @@
 // Initialize variables
-let currentYear = 1840;
+let currentYear = 2024;
 let isPlaying = false;
 let playInterval = null;
 let heatmapLayer = null;
@@ -162,6 +162,10 @@ const playPauseBtn = document.getElementById('play-pause');
 const prevYearBtn = document.getElementById('prev-year');
 const nextYearBtn = document.getElementById('next-year');
 
+// Set initial year display
+currentYearDisplay.textContent = '2024';
+yearSlider.value = '2024';
+
 function updateYear(year) {
     currentYear = year;
     currentYearDisplay.textContent = year;
@@ -169,28 +173,11 @@ function updateYear(year) {
     updateHeatmap();
 }
 
-function togglePlayPause() {
-    isPlaying = !isPlaying;
-    playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
-
-    if (isPlaying) {
-        playInterval = setInterval(() => {
-            let nextYear = parseInt(currentYear) + 1;
-            if (nextYear > 2024) {
-                nextYear = 1840;
-            }
-            updateYear(nextYear);
-        }, 1000);
-    } else {
-        clearInterval(playInterval);
-    }
-}
-
-// Event listeners
-yearSlider.addEventListener('input', (e) => updateYear(parseInt(e.target.value)));
-playPauseBtn.addEventListener('click', togglePlayPause);
-prevYearBtn.addEventListener('click', () => updateYear(Math.max(1840, currentYear - 1)));
-nextYearBtn.addEventListener('click', () => updateYear(Math.min(2024, currentYear + 1)));
+// Disable year controls since we only want 2024
+yearSlider.disabled = true;
+playPauseBtn.style.display = 'none';
+prevYearBtn.style.display = 'none';
+nextYearBtn.style.display = 'none';
 
 // Map event listeners
 map.on('moveend', updateHeatmap);
