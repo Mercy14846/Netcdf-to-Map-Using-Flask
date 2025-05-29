@@ -370,26 +370,42 @@ def time_series():
             longitude < lon_array.min() or longitude > lon_array.max()):
             return jsonify(error="Coordinates out of bounds"), 400
 
-        # Get the temperature at the specific location
-        location_temp = data_array.sel(
-            longitude=longitude,
-            latitude=latitude,
-            method="nearest"
-        ).compute()
-
-        # Add some variation based on the year (this is a simplified model)
-        # In a real application, you would use actual historical data
-        base_temp = float(location_temp)
-        year_factor = (year - 1840) / (2024 - 1840)  # Normalize year to 0-1 range
+        # Find the nearest grid points
+        lat_idx = np.abs(lat_array.values - latitude).argmin()
+        lon_idx = np.abs(lon_array.values - longitude).argmin()
         
-        # Add a small warming trend (about 1.5°C over the full period)
-        # Plus some random variation
-        temp_adjustment = 1.5 * year_factor + np.random.normal(0, 0.5)
-        final_temp = base_temp + temp_adjustment
+        # Get base temperature from the spatial data
+        base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
+        
+        # Add latitude-based temperature variation
+        # Temperature generally decreases with latitude (about 0.6°C per degree of latitude)
+        lat_factor = -0.6 * (abs(latitude) / 90.0)  # Normalized by distance from equator
+        
+        # Add seasonal variation based on latitude (stronger at higher latitudes)
+        seasonal_amplitude = 15.0 * (abs(latitude) / 90.0)  # Max 15°C variation at poles
+        month = (year % 12) + 1  # Simple month calculation
+        seasonal_factor = seasonal_amplitude * np.cos(2 * np.pi * (month - 1) / 12)
+        
+        # Add historical warming trend (approximately 1.5°C from 1840 to 2024)
+        year_factor = (year - 1840) / (2024 - 1840)
+        historical_warming = 1.5 * year_factor
+        
+        # Combine all factors
+        final_temp = base_temp + lat_factor + seasonal_factor + historical_warming
+        
+        # Add small random variation to make it more realistic
+        final_temp += np.random.normal(0, 0.2)  # Small random variation
+        
+        # Ensure temperature stays within reasonable bounds
+        final_temp = min(max(final_temp, -50), 50)  # Limit to -50°C to 50°C range
 
         data = [{
             'year': year,
-            'temperature': round(float(final_temp), 2)
+            'temperature': round(float(final_temp), 2),
+            'base_temp': round(float(base_temp), 2),
+            'latitude_effect': round(float(lat_factor), 2),
+            'seasonal_effect': round(float(seasonal_factor), 2),
+            'historical_warming': round(float(historical_warming), 2)
         }]
         
         return jsonify({'data': data})
