@@ -321,72 +321,72 @@ def tile(longitude, latitude, zoom):
         traceback.print_exc()
         return send_file(create_error_tile("Tile generation error").save(io.BytesIO(), format='PNG'), mimetype='image/png')
 
-@app.route('/api/heatmap-data')
-@cache.cached(timeout=7200)
-def heatmap_data():
+@app.route('/api/heatmap-data', methods=['POST'])
+@cache.memoize(timeout=300)  # 5 minute cache
+def get_heatmap_data():
     try:
-        # Create regular grid of data with optimized memory usage
-        lats = lat_array.values
-        lons = lon_array.values
-        temps = data_array.values
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify(error="No data received"), 400
 
-        # Calculate temperature segments
-        temp_range = np.linspace(min_val, max_val, 10)
-        
-        # Create a regular grid of data
-        grid_data = []
-        lat_step = abs(lats[1] - lats[0])
-        lon_step = abs(lons[1] - lons[0])
+        year = request_data.get('year', 2024)
+        bounds = request_data.get('bounds', {})
+        zoom = request_data.get('zoom', 2)
 
-        # Calculate the number of points to sample
-        lat_samples = len(lats)
-        lon_samples = len(lons)
+        # Get bounds
+        south = float(bounds.get('_southWest', {}).get('lat', lat_array.min()))
+        north = float(bounds.get('_northEast', {}).get('lat', lat_array.max()))
+        west = float(bounds.get('_southWest', {}).get('lng', lon_array.min()))
+        east = float(bounds.get('_northEast', {}).get('lng', lon_array.max()))
 
-        # Create a downsampled grid if the resolution is too high
-        if lat_samples * lon_samples > 10000:
-            stride = int(np.sqrt((lat_samples * lon_samples) / 10000))
-            lats = lats[::stride]
-            lons = lons[::stride]
-            temps = temps[::stride, ::stride]
+        # Adjust resolution based on zoom level
+        if zoom < 3:
+            step = 4  # Lower resolution for zoomed out view
+        elif zoom < 5:
+            step = 2
+        else:
+            step = 1  # Higher resolution for zoomed in view
 
-        # Create the grid data efficiently using numpy operations
-        valid_mask = ~np.isnan(temps)
-        valid_indices = np.where(valid_mask)
-        
-        normalized_temps = np.zeros_like(temps)
-        normalized_temps[valid_mask] = (temps[valid_mask] - min_val) / (max_val - min_val)
-        
-        grid_data = [
-            [float(lats[i]), float(lons[j]), float(normalized_temps[i, j])]
-            for i, j in zip(*valid_indices)
-        ]
+        # Get data within bounds
+        lat_mask = (lat_array >= south) & (lat_array <= north)
+        lon_mask = (lon_array >= west) & (lon_array <= east)
 
-        # Create segments for the legend
-        segments = [
-            {
-                'start': float(temp_range[i]),
-                'end': float(temp_range[i + 1]),
-                'color': None
-            }
-            for i in range(len(temp_range) - 1)
-        ]
+        # Sample points based on step size
+        lats = lat_array[lat_mask][::step]
+        lons = lon_array[lon_mask][::step]
+
+        points = []
+        for lat in lats:
+            for lon in lons:
+                try:
+                    lat_idx, lon_idx = get_nearest_indices(float(lat), float(lon))
+                    base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
+                    
+                    if not np.isnan(base_temp):
+                        temp = calculate_temperature(base_temp, float(lat), year)
+                        points.append({
+                            'lat': float(lat),
+                            'lon': float(lon),
+                            'temperature': float(temp)
+                        })
+                except Exception as e:
+                    print(f"Error calculating temperature for point ({lat}, {lon}): {str(e)}")
+                    continue
 
         return jsonify({
-            'data': grid_data,
-            'min': float(min_val),
-            'max': float(max_val),
-            'segments': segments,
+            'data': points,
             'bounds': {
-                'lat': [float(lats.min()), float(lats.max())],
-                'lon': [float(lons.min()), float(lons.max())]
-            },
-            'resolution': {
-                'lat': float(lat_step),
-                'lon': float(lon_step)
+                'south': float(south),
+                'north': float(north),
+                'west': float(west),
+                'east': float(east)
             }
         })
+
     except Exception as e:
         print(f"Error generating heatmap data: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/data-extent')
