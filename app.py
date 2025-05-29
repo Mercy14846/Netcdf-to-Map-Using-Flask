@@ -46,43 +46,62 @@ def load_data():
     global data, time_data, temp_var, min_val, max_val, lon_array, lat_array, data_array, time_data_var
     
     try:
+        print("\nDEBUG: Starting data loading process...")
+        
         # Load the datasets with chunking for better memory management
         data = xr.open_dataset("static/data/temp_2m.nc", chunks={'latitude': 100, 'longitude': 100})
         time_data = xr.open_dataset("static/data/temperature.nc", chunks={'time': 100})
+        
+        print("DEBUG: Available variables in temp_2m.nc:", list(data.data_vars))
+        print("DEBUG: Available variables in temperature.nc:", list(time_data.data_vars))
         
         # Find temperature variable without recursion
         temp_vars = ['tmin', 'temp', 'temperature', 't2m']
         temp_var = next((var for var in data.data_vars if var in temp_vars), None)
         
         if temp_var is None:
-            print("Available variables in data:", list(data.data_vars))
-            raise ValueError("Could not find temperature variable in data")
+            print("DEBUG: Could not find standard temperature variable, checking all variables:", list(data.data_vars))
+            # If standard names not found, take the first variable as temperature
+            temp_var = list(data.data_vars)[0]
+            print(f"DEBUG: Using first available variable as temperature: {temp_var}")
+        
+        print(f"DEBUG: Selected temperature variable: {temp_var}")
+        print(f"DEBUG: Temperature variable shape: {data[temp_var].shape}")
         
         # Calculate min/max values using dask
         data_values = data[temp_var].values
         min_val = float(np.nanmin(data_values))
         max_val = float(np.nanmax(data_values))
         
-        print(f"Temperature range: {min_val} to {max_val}")
+        print(f"DEBUG: Temperature range: {min_val} to {max_val}")
         
         # Extract dimensions
         lon_array = data['longitude']
         lat_array = data['latitude']
         data_array = data[temp_var]
         
+        print("DEBUG: Coordinate ranges:")
+        print(f"Latitude: {float(lat_array.min())} to {float(lat_array.max())}")
+        print(f"Longitude: {float(lon_array.min())} to {float(lon_array.max())}")
+        
         # Extract time series data without recursion
         time_vars = ['tmin', 'temperature']
         time_data_var = next((time_data[var] for var in time_vars if var in time_data.data_vars), None)
         
         if time_data_var is None:
-            print("Available variables in time_data:", list(time_data.data_vars))
-            raise ValueError("Could not find temperature variable in time series data")
+            print("DEBUG: Could not find standard time series variable, checking all variables:", list(time_data.data_vars))
+            # If standard names not found, take the first variable as temperature
+            time_data_var = time_data[list(time_data.data_vars)[0]]
+            print(f"DEBUG: Using first available variable for time series: {list(time_data.data_vars)[0]}")
+        
+        print("DEBUG: Data loading completed successfully")
             
     except Exception as e:
         print(f"Error loading data: {str(e)}")
         raise
 
 # Initialize data at startup
+print("\nDEBUG: Starting application, loading initial data...")
 load_data()
 
 # https://github.com/ScottSyms/tileshade/
