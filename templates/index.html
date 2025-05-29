@@ -11,19 +11,18 @@
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     
-    <!-- Leaflet.heat -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
-    
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/site.css') }}">
     
-    <!-- Leaflet JavaScript -->
+    <!-- JavaScript Libraries - Order matters! -->
+    <!-- 1. Leaflet core first -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    
-    <!-- D3.js -->
+    <!-- 2. Leaflet plugins after -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+    <!-- 3. Other libraries -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/site.css') }}">
     <style>
         body {
             margin: 0;
@@ -118,6 +117,37 @@
             line-height: 40px;
             color: #333;
         }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-spinner {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .error-message {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            z-index: 2000;
+        }
     </style>
   </head>
   <body>
@@ -159,241 +189,7 @@
         </div>
     </div>
 
-    <script>
-        // Initialize map
-        const map = L.map('map').setView([0, 0], 2);
-        
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        let currentYear = 1840;
-        let isPlaying = false;
-        let playInterval = null;
-        let heatmapLayer = null;
-        let currentTooltip = null;
-        let tooltipLayer = L.layerGroup().addTo(map);
-
-        // Initialize heatmap layer
-        heatmapLayer = L.heatLayer([], {
-            radius: 25,
-            blur: 15,
-            maxZoom: 10,
-            max: 1.0,
-            gradient: {
-                0.0: '#0000FF',  // Very Cold (-40°C)
-                0.2: '#00FFFF',  // Cold
-                0.4: '#00FF00',  // Cool
-                0.6: '#FFFF00',  // Mild
-                0.8: '#FFA500',  // Warm
-                1.0: '#FF0000'   // Hot (40°C)
-            }
-        }).addTo(map);
-
-        function updateHeatmap() {
-            console.log('Fetching heatmap data for year:', currentYear);
-            fetch('/api/heatmap-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    year: currentYear,
-                    bounds: {
-                        _southWest: map.getBounds().getSouthWest(),
-                        _northEast: map.getBounds().getNorthEast()
-                    },
-                    zoom: map.getZoom()
-                })
-            })
-            .then(response => {
-                console.log('Response status:', response.status);
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) throw new Error(data.error);
-                console.log('Received data points:', data.data.length);
-                
-                // Transform data for heatmap
-                const points = data.data.map(point => [
-                    point.lat,
-                    point.lon,
-                    (point.temperature + 40) / 80  // Normalize temperature to 0-1
-                ]);
-                
-                console.log('Processed points:', points.length);
-                console.log('Sample point:', points[0]);
-                
-                // Remove existing layer and create new one
-                if (heatmapLayer) {
-                    map.removeLayer(heatmapLayer);
-                }
-                
-                heatmapLayer = L.heatLayer(points, {
-                    radius: 25,
-                    blur: 15,
-                    maxZoom: 10,
-                    max: 1.0,
-                    gradient: {
-                        0.0: '#0000FF',  // Very Cold (-40°C)
-                        0.2: '#00FFFF',  // Cold
-                        0.4: '#00FF00',  // Cool
-                        0.6: '#FFFF00',  // Mild
-                        0.8: '#FFA500',  // Warm
-                        1.0: '#FF0000'   // Hot (40°C)
-                    }
-                }).addTo(map);
-            })
-            .catch(error => {
-                console.error('Error updating heatmap:', error);
-            });
-        }
-
-        // Add event listeners for map movement
-        map.on('moveend', updateHeatmap);
-        map.on('zoomend', updateHeatmap);
-        
-        // Initial update
-        updateHeatmap();
-
-        // Create a tooltip that follows the mouse
-        let followTooltip = L.tooltip({
-            permanent: false,
-            direction: 'top',
-            offset: [0, -20],
-            className: 'temp-tooltip'
-        });
-
-        // Handle mousemove on map
-        map.on('mousemove', function(e) {
-            if (map.getZoom() < 4) return; // Only show tooltip at closer zoom levels
-
-            // Debug log
-            console.log('Mouse position:', e.latlng);
-
-            fetch('/time-series', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    latitude: parseFloat(e.latlng.lat.toFixed(6)),
-                    longitude: parseFloat(e.latlng.lng.toFixed(6)),
-                    year: parseInt(currentYear)
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(err => {
-                        throw new Error(err.error || 'Network response was not ok');
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) throw new Error(data.error);
-                
-                const timeSeriesData = data.data[0];
-                const temp = timeSeriesData.temperature;
-                
-                // Debug log
-                console.log('Temperature data:', timeSeriesData);
-                
-                // Update tooltip content and position
-                followTooltip
-                    .setContent(`${temp.toFixed(1)}°C`)
-                    .setLatLng(e.latlng);
-                
-                if (!map.hasLayer(followTooltip)) {
-                    followTooltip.addTo(map);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                if (map.hasLayer(followTooltip)) {
-                    map.removeLayer(followTooltip);
-                }
-            });
-        });
-
-        // Remove tooltip when mouse leaves map
-        map.on('mouseout', function() {
-            if (map.hasLayer(followTooltip)) {
-                map.removeLayer(followTooltip);
-            }
-        });
-
-        // Time controls
-        const yearSlider = document.getElementById('year-slider');
-        const currentYearDisplay = document.getElementById('current-year');
-        const playPauseBtn = document.getElementById('play-pause');
-        const prevYearBtn = document.getElementById('prev-year');
-        const nextYearBtn = document.getElementById('next-year');
-
-        function updateYear(year) {
-            currentYear = year;
-            currentYearDisplay.textContent = year;
-            yearSlider.value = year;
-            updateHeatmap();
-        }
-
-        function togglePlayPause() {
-            isPlaying = !isPlaying;
-            playPauseBtn.textContent = isPlaying ? '⏸' : '▶';
-
-            if (isPlaying) {
-                playInterval = setInterval(() => {
-                    let nextYear = parseInt(currentYear) + 1;
-                    if (nextYear > 2024) nextYear = 1840;
-                    updateYear(nextYear);
-                }, 1000);
-            } else {
-                clearInterval(playInterval);
-            }
-        }
-
-        yearSlider.addEventListener('input', (e) => updateYear(parseInt(e.target.value)));
-        playPauseBtn.addEventListener('click', togglePlayPause);
-        prevYearBtn.addEventListener('click', () => updateYear(Math.max(1840, currentYear - 1)));
-        nextYearBtn.addEventListener('click', () => updateYear(Math.min(2024, currentYear + 1)));
-
-        // Initialize map view and heatmap
-        fetch('/api/data-extent')
-            .then(response => response.json())
-            .then(extent => {
-                if (extent.bounds) {
-                    const bounds = L.latLngBounds(
-                        [extent.bounds.lat.min, extent.bounds.lon.min],
-                        [extent.bounds.lat.max, extent.bounds.lon.max]
-                    );
-                    map.fitBounds(bounds);
-                    updateHeatmap();
-                }
-            })
-            .catch(error => console.error('Error fetching data extent:', error));
-
-        // Add throttling to reduce API calls
-        function throttle(func, limit) {
-            let inThrottle;
-            return function(...args) {
-                if (!inThrottle) {
-                    func.apply(this, args);
-                    inThrottle = true;
-                    setTimeout(() => inThrottle = false, limit);
-                }
-            }
-        }
-
-        // Throttle mousemove event
-        map.on('mousemove', throttle(function(e) {
-            map.fire('mousemove', e);
-        }, 100));
-    </script>
-
-    <!-- Custom Map JavaScript -->
+    <!-- Custom JavaScript -->
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
   </body>
 </html>

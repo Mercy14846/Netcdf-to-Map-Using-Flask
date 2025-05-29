@@ -1,3 +1,10 @@
+// Initialize variables
+let currentYear = 1840;
+let isPlaying = false;
+let playInterval = null;
+let heatmapLayer = null;
+let currentTooltip = null;
+
 // Initialize the map with better default view
 const map = L.map('map', {
     center: [20, 0],  // Center map at equator
@@ -8,17 +15,10 @@ const map = L.map('map', {
 });
 
 // Add multiple base layers
-const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
-
-// Initialize variables
-let currentYear = 1840;
-let isPlaying = false;
-let playInterval = null;
-let heatmapLayer = null;
-let currentTooltip = null;
 
 // Define enhanced temperature gradient with more color stops
 const temperatureGradient = {
