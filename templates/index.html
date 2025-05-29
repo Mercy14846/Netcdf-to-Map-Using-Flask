@@ -229,12 +229,88 @@
                    latlng.lng <= bounds.lon.max;
         }
 
+        function updateTemperatureDisplay(coords) {
+            if (!coords) return;
+            
+            const popupContent = currentPopup ? currentPopup.getContent() : null;
+            if (!popupContent) return;
+            
+            popupContent.querySelector('.temp-update').textContent = 'Loading...';
+            
+            fetch('/time-series', {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    latitude: coords.lat,
+                    longitude: coords.lng,
+                    year: currentYear
+                }),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            const err = JSON.parse(text);
+                            throw new Error(err.error || 'Network response was not ok');
+                        } catch (e) {
+                            throw new Error(text || 'Network response was not ok');
+                        }
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                if (!data.data || !Array.isArray(data.data)) {
+                    throw new Error('Invalid data format received from server');
+                }
+                
+                const timeSeriesData = data.data;
+                
+                if (timeSeriesData.length > 0) {
+                    const temp = timeSeriesData[0].temperature;
+                    if (typeof temp === 'number' && !isNaN(temp)) {
+                        const tempText = temp.toFixed(1) + '°C';
+                        popupContent.querySelector('.temp-update').textContent = tempText;
+                        updateTempIcon(popupContent, temp);
+                    } else {
+                        popupContent.querySelector('.temp-update').textContent = 'N/A';
+                        updateTempIcon(popupContent, 0);
+                    }
+                } else {
+                    popupContent.querySelector('.temp-update').textContent = 'No data';
+                    updateTempIcon(popupContent, 0);
+                }
+                
+                if (currentPopup) {
+                    currentPopup.update();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showError(popupContent, error.message);
+                if (currentPopup) {
+                    currentPopup.update();
+                }
+            });
+        }
+
         function updateYear(year) {
             currentYear = year;
             yearDisplay.textContent = year;
             yearSlider.value = year;
             // Update the map display for the new year
             updateMapDisplay(year);
+            
+            // Update temperature display if there's a marker
+            if (currentMarker) {
+                updateTemperatureDisplay(currentMarker.getLatLng());
+            }
         }
 
         function togglePlayPause() {
@@ -338,64 +414,7 @@
             .setContent(popupContent)
             .openOn(map);
             
-            // Include the current year in the request
-            fetch('/time-series', {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    latitude: clickedCoords.lat,
-                    longitude: clickedCoords.lng,
-                    year: currentYear
-                }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.text().then(text => {
-                        try {
-                            const err = JSON.parse(text);
-                            throw new Error(err.error || 'Network response was not ok');
-                        } catch (e) {
-                            throw new Error(text || 'Network response was not ok');
-                        }
-                    });
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.error) {
-                    throw new Error(data.error);
-                }
-                
-                if (!data.data || !Array.isArray(data.data)) {
-                    throw new Error('Invalid data format received from server');
-                }
-                
-                const timeSeriesData = data.data;
-                
-                if (timeSeriesData.length > 0) {
-                    const temp = timeSeriesData[0].temperature;
-                    if (typeof temp === 'number' && !isNaN(temp)) {
-                        const tempText = temp.toFixed(1) + '°C';
-                        popupContent.querySelector('.temp-update').textContent = tempText;
-                        updateTempIcon(popupContent, temp);
-                    } else {
-                        popupContent.querySelector('.temp-update').textContent = 'N/A';
-                        updateTempIcon(popupContent, 0);
-                    }
-                } else {
-                    popupContent.querySelector('.temp-update').textContent = 'No data';
-                    updateTempIcon(popupContent, 0);
-                }
-                
-                currentPopup.update();
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showError(popupContent, error.message);
-                currentPopup.update();
-            });
+            updateTemperatureDisplay(clickedCoords);
         });
 
         // Function to update map display based on year
