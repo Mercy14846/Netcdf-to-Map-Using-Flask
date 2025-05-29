@@ -14,7 +14,7 @@ const map = L.map('map', {
 
 // Add multiple base layers
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxZoom: 9
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
