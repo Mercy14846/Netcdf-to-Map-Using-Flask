@@ -432,11 +432,12 @@ def get_heatmap_data():
         if not request_data:
             return jsonify(error="No data received"), 400
 
-        year = request_data.get('year', 2024)
+        # Force year to be 2024
+        year = 2024
         bounds = request_data.get('bounds', {})
         zoom = request_data.get('zoom', 2)
 
-        print(f"\nDEBUG: Received request with year={year}, zoom={zoom}")
+        print(f"\nDEBUG: Processing request for year 2024, zoom={zoom}")
         print(f"DEBUG: Bounds data: {bounds}")
 
         # Get bounds with default values
