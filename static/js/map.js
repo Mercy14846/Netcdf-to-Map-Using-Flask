@@ -20,21 +20,47 @@ let playInterval = null;
 let heatmapLayer = null;
 let currentTooltip = null;
 
-// Initialize heatmap layer
+// Define enhanced temperature gradient with more color stops
+const temperatureGradient = {
+    0.0: '#000083',  // Deep Blue (-40°C)
+    0.1: '#0000FF',  // Blue (-32°C)
+    0.2: '#0080FF',  // Light Blue (-24°C)
+    0.3: '#00FFFF',  // Cyan (-16°C)
+    0.4: '#00FF80',  // Blue-Green (-8°C)
+    0.5: '#00FF00',  // Green (0°C)
+    0.6: '#80FF00',  // Yellow-Green (8°C)
+    0.7: '#FFFF00',  // Yellow (16°C)
+    0.8: '#FF8000',  // Orange (24°C)
+    0.9: '#FF0000',  // Red (32°C)
+    1.0: '#800000'   // Dark Red (40°C)
+};
+
+// Initialize heatmap layer with enhanced settings
 heatmapLayer = L.heatLayer([], {
     radius: 25,
     blur: 15,
     maxZoom: 10,
     max: 1.0,
-    gradient: {
-        0.0: '#0000FF',  // Very Cold (-40°C)
-        0.2: '#00FFFF',  // Cold
-        0.4: '#00FF00',  // Cool
-        0.6: '#FFFF00',  // Mild
-        0.8: '#FFA500',  // Warm
-        1.0: '#FF0000'   // Hot (40°C)
-    }
+    gradient: temperatureGradient,
+    minOpacity: 0.4,
+    maxOpacity: 0.8
 }).addTo(map);
+
+// Function to convert temperature to color value (for tooltip or other UI elements)
+function getTemperatureColor(temp) {
+    // Normalize temperature from -40 to +40 range to 0-1
+    const normalizedTemp = (temp + 40) / 80;
+    // Find the appropriate color stop
+    const stops = Object.entries(temperatureGradient);
+    for (let i = 0; i < stops.length - 1; i++) {
+        const [pos1, color1] = stops[i];
+        const [pos2, color2] = stops[i + 1];
+        if (normalizedTemp >= parseFloat(pos1) && normalizedTemp <= parseFloat(pos2)) {
+            return color1;
+        }
+    }
+    return temperatureGradient[1.0]; // Return max temperature color if above range
+}
 
 // Add loading indicator functions
 function showLoading() {
@@ -60,7 +86,7 @@ function clearError() {
     errorDiv.style.display = 'none';
 }
 
-// Update heatmap data
+// Update heatmap data with enhanced visualization
 function updateHeatmap() {
     showLoading();
     console.log('Fetching heatmap data for year:', currentYear);
@@ -88,36 +114,36 @@ function updateHeatmap() {
         if (data.error) throw new Error(data.error);
         console.log('Received data points:', data.data.length);
         
-        // Transform data for heatmap
-        const points = data.data.map(point => [
-            point.lat,
-            point.lon,
-            (point.temperature + 40) / 80  // Normalize temperature to 0-1
-        ]);
+        // Transform data for heatmap with enhanced intensity calculation
+        const points = data.data.map(point => {
+            const normalizedTemp = (point.temperature + 40) / 80;
+            // Add intensity weighting based on temperature extremes
+            const intensity = Math.pow(normalizedTemp, 1.2); // Slight emphasis on higher temperatures
+            return [
+                point.lat,
+                point.lon,
+                intensity
+            ];
+        });
         
         console.log('Processed points:', points.length);
         if (points.length > 0) {
             console.log('Sample point:', points[0]);
         }
         
-        // Remove existing layer and create new one
+        // Remove existing layer and create new one with enhanced settings
         if (heatmapLayer) {
             map.removeLayer(heatmapLayer);
         }
         
         heatmapLayer = L.heatLayer(points, {
-            radius: 25,
-            blur: 15,
+            radius: map.getZoom() < 4 ? 15 : 25, // Adaptive radius based on zoom
+            blur: map.getZoom() < 4 ? 10 : 15,   // Adaptive blur based on zoom
             maxZoom: 10,
             max: 1.0,
-            gradient: {
-                0.0: '#0000FF',  // Very Cold (-40°C)
-                0.2: '#00FFFF',  // Cold
-                0.4: '#00FF00',  // Cool
-                0.6: '#FFFF00',  // Mild
-                0.8: '#FFA500',  // Warm
-                1.0: '#FF0000'   // Hot (40°C)
-            }
+            gradient: temperatureGradient,
+            minOpacity: 0.4,
+            maxOpacity: 0.8
         }).addTo(map);
         
         hideLoading();
@@ -190,9 +216,9 @@ function throttle(func, limit) {
     }
 }
 
-// Handle mousemove on map
+// Update tooltip to include color-coded temperature display
 map.on('mousemove', throttle(function(e) {
-    if (map.getZoom() < 4) return; // Only show tooltip at closer zoom levels
+    if (map.getZoom() < 4) return;
 
     fetch('/time-series', {
         method: 'POST',
@@ -207,9 +233,7 @@ map.on('mousemove', throttle(function(e) {
         })
     })
     .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
         return response.json();
     })
     .then(data => {
@@ -217,10 +241,17 @@ map.on('mousemove', throttle(function(e) {
         
         const timeSeriesData = data.data[0];
         const temp = timeSeriesData.temperature;
+        const color = getTemperatureColor(temp);
         
-        // Update tooltip content and position
+        // Create color-coded tooltip content
+        const tooltipContent = `
+            <div style="color: ${color}; font-weight: bold;">
+                ${temp.toFixed(1)}°C
+            </div>
+        `;
+        
         followTooltip
-            .setContent(`${temp.toFixed(1)}°C`)
+            .setContent(tooltipContent)
             .setLatLng(e.latlng);
         
         if (!map.hasLayer(followTooltip)) {
