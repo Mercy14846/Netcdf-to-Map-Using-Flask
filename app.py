@@ -456,29 +456,49 @@ def calculate_temperature(base_temp, latitude, year):
 def time_series():
     try:
         request_data = request.get_json()
+        print(f"DEBUG: Received request data: {request_data}")  # Debug log
+        
         if not request_data:
+            print("DEBUG: No JSON data received in request")
             return jsonify(error="No data received"), 400
             
-        latitude = float(request_data.get('latitude'))
-        longitude = float(request_data.get('longitude'))
-        year = int(request_data.get('year', 2024))
+        # Extract and validate each field
+        try:
+            latitude = float(request_data.get('latitude'))
+            longitude = float(request_data.get('longitude'))
+            year = int(request_data.get('year', 2024))
+        except (TypeError, ValueError) as e:
+            print(f"DEBUG: Data validation error - {str(e)}")
+            print(f"DEBUG: latitude={request_data.get('latitude')}, longitude={request_data.get('longitude')}, year={request_data.get('year')}")
+            return jsonify(error=f"Invalid data format: {str(e)}"), 400
         
-        # Validate coordinates
-        if (latitude < lat_array.min() or latitude > lat_array.max() or
-            longitude < lon_array.min() or longitude > lon_array.max()):
-            return jsonify(error="Coordinates out of bounds"), 400
+        print(f"DEBUG: Processing request for lat={latitude}, lon={longitude}, year={year}")
+        
+        # Validate coordinate bounds
+        if not lat_array.min() <= latitude <= lat_array.max():
+            print(f"DEBUG: Latitude {latitude} out of bounds [{lat_array.min()}, {lat_array.max()}]")
+            return jsonify(error=f"Latitude {latitude} out of bounds"), 400
+            
+        if not lon_array.min() <= longitude <= lon_array.max():
+            print(f"DEBUG: Longitude {longitude} out of bounds [{lon_array.min()}, {lon_array.max()}]")
+            return jsonify(error=f"Longitude {longitude} out of bounds"), 400
 
         try:
             # Get nearest grid points (cached)
             lat_idx, lon_idx = get_nearest_indices(latitude, longitude)
+            print(f"DEBUG: Found grid indices: lat_idx={lat_idx}, lon_idx={lon_idx}")
             
             # Get base temperature
             base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
+            print(f"DEBUG: Base temperature: {base_temp}")
+            
             if np.isnan(base_temp):
+                print("DEBUG: Found NaN temperature, using default")
                 base_temp = 15.0  # Default temperature if NaN
             
             # Calculate temperature with all effects
             final_temp = calculate_temperature(base_temp, latitude, year)
+            print(f"DEBUG: Final calculated temperature: {final_temp}")
             
             return jsonify({
                 'data': [{
@@ -489,10 +509,14 @@ def time_series():
             
         except Exception as e:
             print(f"Error processing temperature data: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': str(e)}), 500
             
     except Exception as e:
         print(f"Error in time series endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/layers')

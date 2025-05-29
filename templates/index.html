@@ -123,23 +123,37 @@
         map.on('mousemove', function(e) {
             if (map.getZoom() < 4) return; // Only show tooltip at closer zoom levels
 
+            // Debug log
+            console.log('Mouse position:', e.latlng);
+
             fetch('/time-series', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
                 body: JSON.stringify({
-                    latitude: e.latlng.lat,
-                    longitude: e.latlng.lng,
-                    year: currentYear
+                    latitude: parseFloat(e.latlng.lat.toFixed(6)),
+                    longitude: parseFloat(e.latlng.lng.toFixed(6)),
+                    year: parseInt(currentYear)
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(err => {
+                        throw new Error(err.error || 'Network response was not ok');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) throw new Error(data.error);
                 
                 const timeSeriesData = data.data[0];
                 const temp = timeSeriesData.temperature;
+                
+                // Debug log
+                console.log('Temperature data:', timeSeriesData);
                 
                 // Update tooltip content and position
                 followTooltip
@@ -230,4 +244,5 @@
         }, 100));
     </script>
   </body>
+</html>
 </html>
