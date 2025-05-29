@@ -177,6 +177,7 @@
         }).addTo(map);
 
         function updateHeatmap() {
+            console.log('Fetching heatmap data for year:', currentYear);
             fetch('/api/heatmap-data', {
                 method: 'POST',
                 headers: {
@@ -192,9 +193,13 @@
                     zoom: map.getZoom()
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
             .then(data => {
                 if (data.error) throw new Error(data.error);
+                console.log('Received data points:', data.data.length);
                 
                 // Transform data for heatmap
                 const points = data.data.map(point => [
@@ -202,13 +207,41 @@
                     point.lon,
                     (point.temperature + 40) / 80  // Normalize temperature to 0-1
                 ]);
-
-                heatmapLayer.setLatLngs(points);
+                
+                console.log('Processed points:', points.length);
+                console.log('Sample point:', points[0]);
+                
+                // Remove existing layer and create new one
+                if (heatmapLayer) {
+                    map.removeLayer(heatmapLayer);
+                }
+                
+                heatmapLayer = L.heatLayer(points, {
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 10,
+                    max: 1.0,
+                    gradient: {
+                        0.0: '#0000FF',  // Very Cold (-40°C)
+                        0.2: '#00FFFF',  // Cold
+                        0.4: '#00FF00',  // Cool
+                        0.6: '#FFFF00',  // Mild
+                        0.8: '#FFA500',  // Warm
+                        1.0: '#FF0000'   // Hot (40°C)
+                    }
+                }).addTo(map);
             })
             .catch(error => {
                 console.error('Error updating heatmap:', error);
             });
         }
+
+        // Add event listeners for map movement
+        map.on('moveend', updateHeatmap);
+        map.on('zoomend', updateHeatmap);
+        
+        // Initial update
+        updateHeatmap();
 
         // Create a tooltip that follows the mouse
         let followTooltip = L.tooltip({

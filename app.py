@@ -333,14 +333,26 @@ def get_heatmap_data():
         bounds = request_data.get('bounds', {})
         zoom = request_data.get('zoom', 2)
 
-        # Get bounds with default values
-        south = float(bounds.get('_southWest', {}).get('lat', -90))
-        north = float(bounds.get('_northEast', {}).get('lat', 90))
-        west = float(bounds.get('_southWest', {}).get('lng', -180))
-        east = float(bounds.get('_northEast', {}).get('lng', 180))
+        print(f"\nDEBUG: Received request with year={year}, zoom={zoom}")
+        print(f"DEBUG: Bounds data: {bounds}")
 
-        # Print debug information
-        print(f"DEBUG: Processing request for bounds: N={north}, S={south}, E={east}, W={west}, zoom={zoom}")
+        # Get bounds with default values
+        try:
+            south = float(bounds.get('_southWest', {}).get('lat', -90))
+            north = float(bounds.get('_northEast', {}).get('lat', 90))
+            west = float(bounds.get('_southWest', {}).get('lng', -180))
+            east = float(bounds.get('_northEast', {}).get('lng', 180))
+        except (TypeError, ValueError) as e:
+            print(f"DEBUG: Error parsing bounds: {e}")
+            return jsonify(error=f"Invalid bounds format: {str(e)}"), 400
+
+        print(f"DEBUG: Processed bounds: N={north}, S={south}, E={east}, W={west}")
+
+        # Validate bounds
+        if not (-90 <= south <= 90 and -90 <= north <= 90):
+            return jsonify(error="Invalid latitude bounds"), 400
+        if not (-180 <= west <= 180 and -180 <= east <= 180):
+            return jsonify(error="Invalid longitude bounds"), 400
 
         # Adjust resolution based on zoom level
         if zoom < 3:
@@ -353,6 +365,10 @@ def get_heatmap_data():
         # Get data within bounds
         lat_mask = (lat_array >= south) & (lat_array <= north)
         lon_mask = (lon_array >= west) & (lon_array <= east)
+
+        if not any(lat_mask) or not any(lon_mask):
+            print("DEBUG: No data points found within bounds")
+            return jsonify({'data': [], 'bounds': {'south': south, 'north': north, 'west': west, 'east': east}})
 
         # Sample points based on step size
         lats = lat_array[lat_mask][::step]
@@ -369,16 +385,19 @@ def get_heatmap_data():
                     
                     if not np.isnan(base_temp):
                         temp = calculate_temperature(base_temp, float(lat), year)
-                        points.append({
-                            'lat': float(lat),
-                            'lon': float(lon),
-                            'temperature': float(temp)
-                        })
+                        if -40 <= temp <= 40:  # Validate temperature range
+                            points.append({
+                                'lat': float(lat),
+                                'lon': float(lon),
+                                'temperature': float(temp)
+                            })
                 except Exception as e:
-                    print(f"Error calculating temperature for point ({lat}, {lon}): {str(e)}")
+                    print(f"DEBUG: Error calculating temperature for point ({lat}, {lon}): {str(e)}")
                     continue
 
-        print(f"DEBUG: Generated {len(points)} data points")
+        print(f"DEBUG: Generated {len(points)} valid data points")
+        if points:
+            print(f"DEBUG: Sample point - {points[0]}")
 
         return jsonify({
             'data': points,
