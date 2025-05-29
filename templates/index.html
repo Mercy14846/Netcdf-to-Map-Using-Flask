@@ -202,6 +202,30 @@
             font-size: 11px;
             line-height: 1.4;
         }
+
+        .temp-display {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .temp-details {
+            font-size: 12px;
+            margin: 10px 0;
+            color: #666;
+        }
+
+        .temp-details > div {
+            margin: 2px 0;
+        }
+
+        .error-message {
+            color: #ff0000;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
     </style>
   </head>
   <body>
@@ -250,7 +274,13 @@
     <div id="popup-template" style="display: none;">
         <div class="temp-display">
             <i class="temp-icon fas"></i>
-            <span class="temp-update">--</span>
+            <span class="temp-value">--</span>
+        </div>
+        <div class="temp-details">
+            <div class="base-temp">Base: <span class="base-temp-value">--</span></div>
+            <div class="lat-effect">Latitude effect: <span class="lat-effect-value">--</span></div>
+            <div class="seasonal-effect">Seasonal: <span class="seasonal-effect-value">--</span></div>
+            <div class="historical-effect">Historical: <span class="historical-effect-value">--</span></div>
         </div>
         <div class="error-message"></div>
     </div>
@@ -335,9 +365,9 @@
             content.id = 'active-popup';
             
             // Initialize the content with loading state
-            const tempUpdate = content.querySelector('.temp-update');
-            if (tempUpdate) {
-                tempUpdate.textContent = 'Loading...';
+            const tempValue = content.querySelector('.temp-value');
+            if (tempValue) {
+                tempValue.textContent = 'Loading...';
             }
             
             return content;
@@ -365,9 +395,9 @@
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
             
-            const tempUpdate = container.querySelector('.temp-update');
-            if (tempUpdate) {
-                tempUpdate.textContent = '--';
+            const tempValue = container.querySelector('.temp-value');
+            if (tempValue) {
+                tempValue.textContent = '--';
             }
             updateTempIcon(container, 0);
         }
@@ -427,6 +457,34 @@
             }
         });
 
+        function updatePopupContent(popupContent, data) {
+            if (!popupContent || !data) return;
+
+            const tempValue = popupContent.querySelector('.temp-value');
+            const baseTempValue = popupContent.querySelector('.base-temp-value');
+            const latEffectValue = popupContent.querySelector('.lat-effect-value');
+            const seasonalEffectValue = popupContent.querySelector('.seasonal-effect-value');
+            const historicalEffectValue = popupContent.querySelector('.historical-effect-value');
+
+            if (data.temperature !== undefined) {
+                tempValue.textContent = `${data.temperature.toFixed(1)}°C`;
+                updateTempIcon(popupContent, data.temperature);
+            }
+
+            if (data.components) {
+                const {base_temp, latitude_effect, seasonal_effect, historical_warming, month} = data.components;
+                
+                if (baseTempValue) baseTempValue.textContent = `${base_temp.toFixed(1)}°C`;
+                if (latEffectValue) latEffectValue.textContent = `${latitude_effect.toFixed(1)}°C`;
+                if (seasonalEffectValue) {
+                    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const monthName = monthNames[month - 1] || '';
+                    seasonalEffectValue.textContent = `${seasonal_effect.toFixed(1)}°C (${monthName})`;
+                }
+                if (historicalEffectValue) historicalEffectValue.textContent = `${historical_warming.toFixed(1)}°C`;
+            }
+        }
+
         function updateTemperatureDisplay(coords) {
             if (!coords) {
                 console.error('No coordinates provided');
@@ -439,13 +497,10 @@
                 return;
             }
             
-            const tempUpdate = popupContent.querySelector('.temp-update');
-            if (!tempUpdate) {
-                console.error('Temperature update element not found');
-                return;
+            const tempValue = popupContent.querySelector('.temp-value');
+            if (tempValue) {
+                tempValue.textContent = 'Loading...';
             }
-            
-            tempUpdate.textContent = 'Loading...';
             
             fetch('/time-series', {
                 method: 'POST',
@@ -485,34 +540,22 @@
                     throw new Error('Invalid data format received from server');
                 }
                 
-                const timeSeriesData = data.data;
-                const tempUpdateElem = popupContent.querySelector('.temp-update');
-                
-                if (!tempUpdateElem) {
-                    console.error('Temperature update element not found after data received');
-                    return;
-                }
-                
-                if (timeSeriesData.length > 0) {
-                    const temp = timeSeriesData[0].temperature;
-                    if (typeof temp === 'number' && !isNaN(temp)) {
-                        const tempText = temp.toFixed(1) + '°C';
-                        tempUpdateElem.textContent = tempText;
-                        updateTempIcon(popupContent, temp);
-                        
-                        // Update legend with current data
-                        updateLegendStats({
-                            latitude: coords.lat,
-                            longitude: coords.lng,
-                            temperature: temp,
-                            year: currentYear
-                        });
-                    } else {
-                        tempUpdateElem.textContent = 'N/A';
-                        updateTempIcon(popupContent, 0);
-                    }
+                const timeSeriesData = data.data[0];  // Get the first (and only) data point
+                if (timeSeriesData) {
+                    updatePopupContent(popupContent, timeSeriesData);
+                    
+                    // Update legend with current data
+                    updateLegendStats({
+                        latitude: coords.lat,
+                        longitude: coords.lng,
+                        temperature: timeSeriesData.temperature,
+                        year: currentYear
+                    });
                 } else {
-                    tempUpdateElem.textContent = 'No data';
+                    const tempValue = popupContent.querySelector('.temp-value');
+                    if (tempValue) {
+                        tempValue.textContent = 'No data';
+                    }
                     updateTempIcon(popupContent, 0);
                 }
                 
