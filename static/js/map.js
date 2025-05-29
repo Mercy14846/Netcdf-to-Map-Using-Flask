@@ -1,7 +1,5 @@
 // Initialize variables
-let currentYear = 2024;
-let isPlaying = false;
-let playInterval = null;
+let currentYear = 2024;  // Fixed to 2024
 let heatmapLayer = null;
 let currentTooltip = null;
 
@@ -98,7 +96,6 @@ function updateHeatmap() {
             'Accept': 'application/json'
         },
         body: JSON.stringify({
-            year: currentYear,
             bounds: {
                 _southWest: map.getBounds().getSouthWest(),
                 _northEast: map.getBounds().getNorthEast()
@@ -155,110 +152,9 @@ function updateHeatmap() {
     });
 }
 
-// Time controls
-const yearSlider = document.getElementById('year-slider');
-const currentYearDisplay = document.getElementById('current-year');
-const playPauseBtn = document.getElementById('play-pause');
-const prevYearBtn = document.getElementById('prev-year');
-const nextYearBtn = document.getElementById('next-year');
-
-// Set initial year display
-currentYearDisplay.textContent = '2024';
-yearSlider.value = '2024';
-
-function updateYear(year) {
-    currentYear = year;
-    currentYearDisplay.textContent = year;
-    yearSlider.value = year;
-    updateHeatmap();
-}
-
-// Disable year controls since we only want 2024
-yearSlider.disabled = true;
-playPauseBtn.style.display = 'none';
-prevYearBtn.style.display = 'none';
-nextYearBtn.style.display = 'none';
-
 // Map event listeners
 map.on('moveend', updateHeatmap);
 map.on('zoomend', updateHeatmap);
-
-// Temperature tooltip
-let followTooltip = L.tooltip({
-    permanent: false,
-    direction: 'top',
-    offset: [0, -20],
-    className: 'temp-tooltip'
-});
-
-// Throttle function
-function throttle(func, limit) {
-    let inThrottle;
-    return function(...args) {
-        if (!inThrottle) {
-            func.apply(this, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    }
-}
-
-// Update tooltip to include color-coded temperature display
-map.on('mousemove', throttle(function(e) {
-    if (map.getZoom() < 4) return;
-
-    fetch('/time-series', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-            latitude: parseFloat(e.latlng.lat.toFixed(6)),
-            longitude: parseFloat(e.latlng.lng.toFixed(6)),
-            year: parseInt(currentYear)
-        })
-    })
-    .then(response => {
-        if (!response.ok) throw new Error('Network response was not ok');
-        return response.json();
-    })
-    .then(data => {
-        if (data.error) throw new Error(data.error);
-        
-        const timeSeriesData = data.data[0];
-        const temp = timeSeriesData.temperature;
-        const color = getTemperatureColor(temp);
-        
-        // Create color-coded tooltip content
-        const tooltipContent = `
-            <div style="color: ${color}; font-weight: bold;">
-                ${temp.toFixed(1)}°C
-            </div>
-        `;
-        
-        followTooltip
-            .setContent(tooltipContent)
-            .setLatLng(e.latlng);
-        
-        if (!map.hasLayer(followTooltip)) {
-            followTooltip.addTo(map);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        if (map.hasLayer(followTooltip)) {
-            map.removeLayer(followTooltip);
-        }
-    });
-}, 100));
-
-// Remove tooltip when mouse leaves map
-map.on('mouseout', function() {
-    if (map.hasLayer(followTooltip)) {
-        map.removeLayer(followTooltip);
-    }
-});
 
 // Add scale control
 L.control.scale({position: 'bottomleft'}).addTo(map);
