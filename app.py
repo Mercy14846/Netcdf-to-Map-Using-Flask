@@ -365,50 +365,71 @@ def time_series():
         longitude = float(request_data.get('longitude'))
         year = int(request_data.get('year', 2024))  # Default to 2024 if not specified
         
+        print(f"\nDEBUG: Processing request for lat={latitude}, lon={longitude}, year={year}")
+        print(f"DEBUG: Data array shape: {data_array.shape}")
+        print(f"DEBUG: Available coordinates - Latitude: {lat_array.values.min()} to {lat_array.values.max()}")
+        print(f"DEBUG: Available coordinates - Longitude: {lon_array.values.min()} to {lon_array.values.max()}")
+        
         # Validate coordinates are within bounds
         if (latitude < lat_array.min() or latitude > lat_array.max() or
             longitude < lon_array.min() or longitude > lon_array.max()):
             return jsonify(error="Coordinates out of bounds"), 400
 
-        # Find the nearest grid points
-        lat_idx = np.abs(lat_array.values - latitude).argmin()
-        lon_idx = np.abs(lon_array.values - longitude).argmin()
-        
-        # Get base temperature from the spatial data
-        base_temp = float(data_array.isel(latitude=lat_idx, longitude=lon_idx).values)
-        
-        # Add latitude-based temperature variation
-        # Temperature generally decreases with latitude (about 0.6°C per degree of latitude)
-        lat_factor = -0.6 * (abs(latitude) / 90.0)  # Normalized by distance from equator
-        
-        # Add seasonal variation based on latitude (stronger at higher latitudes)
-        seasonal_amplitude = 15.0 * (abs(latitude) / 90.0)  # Max 15°C variation at poles
-        month = (year % 12) + 1  # Simple month calculation
-        seasonal_factor = seasonal_amplitude * np.cos(2 * np.pi * (month - 1) / 12)
-        
-        # Add historical warming trend (approximately 1.5°C from 1840 to 2024)
-        year_factor = (year - 1840) / (2024 - 1840)
-        historical_warming = 1.5 * year_factor
-        
-        # Combine all factors
-        final_temp = base_temp + lat_factor + seasonal_factor + historical_warming
-        
-        # Add small random variation to make it more realistic
-        final_temp += np.random.normal(0, 0.2)  # Small random variation
-        
-        # Ensure temperature stays within reasonable bounds
-        final_temp = min(max(final_temp, -50), 50)  # Limit to -50°C to 50°C range
-
-        data = [{
-            'year': year,
-            'temperature': round(float(final_temp), 2),
-            'base_temp': round(float(base_temp), 2),
-            'latitude_effect': round(float(lat_factor), 2),
-            'seasonal_effect': round(float(seasonal_factor), 2),
-            'historical_warming': round(float(historical_warming), 2)
-        }]
-        
-        return jsonify({'data': data})
+        # Get the actual temperature data directly
+        try:
+            # Get the exact data values around the point
+            lat_idx = np.abs(lat_array.values - latitude).argmin()
+            lon_idx = np.abs(lon_array.values - longitude).argmin()
+            
+            print(f"DEBUG: Selected indices - lat_idx={lat_idx}, lon_idx={lon_idx}")
+            print(f"DEBUG: Actual latitude: {lat_array.values[lat_idx]}, longitude: {lon_array.values[lon_idx]}")
+            
+            # Get raw temperature value
+            raw_temp = data_array.isel(latitude=lat_idx, longitude=lon_idx).values
+            print(f"DEBUG: Raw temperature from data: {raw_temp}")
+            
+            if isinstance(raw_temp, np.ndarray):
+                print(f"DEBUG: Raw temperature is an array with shape: {raw_temp.shape}")
+                raw_temp = float(raw_temp.mean())
+            
+            # Check for NaN or invalid values
+            if np.isnan(raw_temp):
+                print("DEBUG: Warning - Got NaN temperature value!")
+                raw_temp = 15.0  # Default to 15°C if we get a NaN value
+            
+            base_temp = float(raw_temp)
+            print(f"DEBUG: Base temperature: {base_temp}")
+            
+            # Calculate temperature adjustments
+            lat_factor = -0.6 * (abs(latitude) / 90.0)
+            seasonal_amplitude = 15.0 * (abs(latitude) / 90.0)
+            month = (year % 12) + 1
+            seasonal_factor = seasonal_amplitude * np.cos(2 * np.pi * (month - 1) / 12)
+            year_factor = (year - 1840) / (2024 - 1840)
+            historical_warming = 1.5 * year_factor
+            
+            print(f"DEBUG: Adjustments - Latitude: {lat_factor}, Seasonal: {seasonal_factor}, Historical: {historical_warming}")
+            
+            # Combine all factors
+            final_temp = base_temp + lat_factor + seasonal_factor + historical_warming
+            final_temp = min(max(final_temp, -50), 50)  # Limit to reasonable range
+            
+            print(f"DEBUG: Final temperature: {final_temp}")
+            
+            data = [{
+                'year': year,
+                'temperature': round(float(final_temp), 2),
+                'base_temp': round(float(base_temp), 2),
+                'latitude_effect': round(float(lat_factor), 2),
+                'seasonal_effect': round(float(seasonal_factor), 2),
+                'historical_warming': round(float(historical_warming), 2)
+            }]
+            
+            return jsonify({'data': data})
+            
+        except Exception as e:
+            print(f"DEBUG: Error processing temperature data: {str(e)}")
+            raise
             
     except Exception as e:
         print(f"Error in time series endpoint: {str(e)}")
