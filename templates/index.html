@@ -322,16 +322,130 @@
             }
         }
 
-        function updateTemperatureDisplay(coords) {
-            if (!coords) return;
+        function createPopupContent(latlng) {
+            const template = document.getElementById('popup-template');
+            if (!template) {
+                console.error('Popup template not found');
+                return null;
+            }
             
-            const popupContent = currentPopup ? currentPopup.getContent() : null;
-            if (!popupContent) return;
+            // Clone the template
+            const content = template.cloneNode(true);
+            content.style.display = 'block';
+            content.id = 'active-popup';
             
-            const tempUpdate = popupContent.querySelector('.temp-update');
+            // Initialize the content with loading state
+            const tempUpdate = content.querySelector('.temp-update');
             if (tempUpdate) {
                 tempUpdate.textContent = 'Loading...';
             }
+            
+            return content;
+        }
+
+        function updateTempIcon(container, temperature) {
+            if (!container) return;
+            const icon = container.querySelector('.temp-icon');
+            if (!icon) return;
+            
+            icon.classList.remove('fa-thermometer-full', 'fa-thermometer-empty', 'hot', 'cold');
+            
+            if (temperature > 20) {
+                icon.classList.add('fa-thermometer-full', 'hot');
+            } else {
+                icon.classList.add('fa-thermometer-empty', 'cold');
+            }
+        }
+
+        function showError(container, message) {
+            if (!container) return;
+            const errorDiv = container.querySelector('.error-message');
+            if (!errorDiv) return;
+            
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            const tempUpdate = container.querySelector('.temp-update');
+            if (tempUpdate) {
+                tempUpdate.textContent = '--';
+            }
+            updateTempIcon(container, 0);
+        }
+
+        function clearError(container) {
+            if (!container) return;
+            const errorDiv = container.querySelector('.error-message');
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
+            }
+        }
+
+        map.on('click', function(e) {
+            try {
+                // Check if click is within data bounds
+                if (!isPointInDataBounds(e.latlng)) {
+                    if (currentPopup) {
+                        map.closePopup(currentPopup);
+                    }
+                    if (currentMarker) {
+                        map.removeLayer(currentMarker);
+                    }
+                    return;
+                }
+
+                let clickedCoords = e.latlng;
+                
+                // Remove existing marker
+                if (currentMarker) {
+                    map.removeLayer(currentMarker);
+                }
+                
+                // Create new marker
+                currentMarker = L.marker(clickedCoords).addTo(map);
+                
+                // Create popup content
+                const popupContent = createPopupContent(clickedCoords);
+                if (!popupContent) {
+                    console.error('Failed to create popup content');
+                    return;
+                }
+                
+                // Create and open popup
+                currentPopup = L.popup({
+                    maxWidth: 200,
+                    className: 'custom-popup'
+                })
+                .setLatLng(clickedCoords)
+                .setContent(popupContent)
+                .openOn(map);
+                
+                // Update temperature display
+                updateTemperatureDisplay(clickedCoords);
+            } catch (error) {
+                console.error('Error handling map click:', error);
+            }
+        });
+
+        function updateTemperatureDisplay(coords) {
+            if (!coords) {
+                console.error('No coordinates provided');
+                return;
+            }
+            
+            const popupContent = currentPopup ? currentPopup.getContent() : null;
+            if (!popupContent) {
+                console.error('No popup content available');
+                return;
+            }
+            
+            const tempUpdate = popupContent.querySelector('.temp-update');
+            if (!tempUpdate) {
+                console.error('Temperature update element not found');
+                return;
+            }
+            
+            tempUpdate.textContent = 'Loading...';
             
             fetch('/time-series', {
                 method: 'POST',
@@ -358,6 +472,11 @@
                 return response.json();
             })
             .then(data => {
+                if (!popupContent || !currentPopup) {
+                    console.error('Popup was closed before data was received');
+                    return;
+                }
+                
                 if (data.error) {
                     throw new Error(data.error);
                 }
@@ -367,15 +486,18 @@
                 }
                 
                 const timeSeriesData = data.data;
+                const tempUpdateElem = popupContent.querySelector('.temp-update');
+                
+                if (!tempUpdateElem) {
+                    console.error('Temperature update element not found after data received');
+                    return;
+                }
                 
                 if (timeSeriesData.length > 0) {
                     const temp = timeSeriesData[0].temperature;
                     if (typeof temp === 'number' && !isNaN(temp)) {
                         const tempText = temp.toFixed(1) + '°C';
-                        const tempUpdateElem = popupContent.querySelector('.temp-update');
-                        if (tempUpdateElem) {
-                            tempUpdateElem.textContent = tempText;
-                        }
+                        tempUpdateElem.textContent = tempText;
                         updateTempIcon(popupContent, temp);
                         
                         // Update legend with current data
@@ -386,28 +508,20 @@
                             year: currentYear
                         });
                     } else {
-                        const tempUpdateElem = popupContent.querySelector('.temp-update');
-                        if (tempUpdateElem) {
-                            tempUpdateElem.textContent = 'N/A';
-                        }
+                        tempUpdateElem.textContent = 'N/A';
                         updateTempIcon(popupContent, 0);
                     }
                 } else {
-                    const tempUpdateElem = popupContent.querySelector('.temp-update');
-                    if (tempUpdateElem) {
-                        tempUpdateElem.textContent = 'No data';
-                    }
+                    tempUpdateElem.textContent = 'No data';
                     updateTempIcon(popupContent, 0);
                 }
                 
-                if (currentPopup) {
-                    currentPopup.update();
-                }
+                currentPopup.update();
             })
             .catch(error => {
                 console.error('Error:', error);
-                showError(popupContent, error.message);
-                if (currentPopup) {
+                if (popupContent && currentPopup) {
+                    showError(popupContent, error.message);
                     currentPopup.update();
                 }
             });
@@ -462,86 +576,6 @@
         nextYearBtn.addEventListener('click', () => {
             let nextYear = Math.min(2024, parseInt(yearSlider.value) + 1);
             updateYear(nextYear);
-        });
-
-        function createPopupContent(latlng) {
-            const template = document.getElementById('popup-template');
-            const content = template.cloneNode(true);
-            content.style.display = 'block';
-            content.id = 'active-popup';
-            return content;
-        }
-
-        function updateTempIcon(container, temperature) {
-            if (!container) return;
-            const icon = container.querySelector('.temp-icon');
-            if (!icon) return;
-            
-            icon.classList.remove('fa-thermometer-full', 'fa-thermometer-empty', 'hot', 'cold');
-            
-            if (temperature > 20) {
-                icon.classList.add('fa-thermometer-full', 'hot');
-            } else {
-                icon.classList.add('fa-thermometer-empty', 'cold');
-            }
-        }
-
-        function showError(container, message) {
-            if (!container) return;
-            const errorDiv = container.querySelector('.error-message');
-            if (!errorDiv) return;
-            
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            
-            const tempUpdate = container.querySelector('.temp-update');
-            if (tempUpdate) {
-                tempUpdate.textContent = '--';
-            }
-            updateTempIcon(container, 0);
-        }
-
-        function clearError(container) {
-            if (!container) return;
-            const errorDiv = container.querySelector('.error-message');
-            if (errorDiv) {
-                errorDiv.style.display = 'none';
-                errorDiv.textContent = '';
-            }
-        }
-
-        map.on('click', function(e) {
-            // Check if click is within data bounds
-            if (!isPointInDataBounds(e.latlng)) {
-                if (currentPopup) {
-                    map.closePopup(currentPopup);
-                }
-                if (currentMarker) {
-                    map.removeLayer(currentMarker);
-                }
-                return;
-            }
-
-            let clickedCoords = e.latlng;
-            
-            if (currentMarker) {
-                map.removeLayer(currentMarker);
-            }
-            
-            currentMarker = L.marker(clickedCoords).addTo(map);
-            
-            const popupContent = createPopupContent(clickedCoords);
-            popupContent.querySelector('.temp-update').textContent = 'Loading...';
-            
-            currentPopup = L.popup({
-                maxWidth: 200,
-                className: 'custom-popup'
-            })
-            .setLatLng(clickedCoords)
-            .setContent(popupContent)
-            .openOn(map);
-            
-            updateTemperatureDisplay(clickedCoords);
         });
 
         // Function to update map display based on year
