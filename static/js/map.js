@@ -6,7 +6,7 @@ let currentTooltip = null;
 // Initialize the map with better default view
 const map = L.map('map', {
     center: [20, 0],  // Center map at equator
-    zoom: 3,         // Default zoom level
+    zoom: 4,         // Default zoom level
     zoomControl: false,
     minZoom: 2,      // Restrict minimum zoom
     maxZoom: 18      // Maximum zoom level
