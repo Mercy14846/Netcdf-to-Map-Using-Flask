@@ -370,19 +370,26 @@ def time_series():
             longitude < lon_array.min() or longitude > lon_array.max()):
             return jsonify(error="Coordinates out of bounds"), 400
 
-        # For now, just return the current temperature for the requested year
-        # This will be updated when we have the full temporal dataset
-        ts_slice = time_data_var.sel(
+        # Get the temperature at the specific location
+        location_temp = data_array.sel(
             longitude=longitude,
             latitude=latitude,
             method="nearest"
         ).compute()
 
-        # Simulate historical data for now
-        # This will be replaced with actual data when available
+        # Add some variation based on the year (this is a simplified model)
+        # In a real application, you would use actual historical data
+        base_temp = float(location_temp)
+        year_factor = (year - 1840) / (2024 - 1840)  # Normalize year to 0-1 range
+        
+        # Add a small warming trend (about 1.5°C over the full period)
+        # Plus some random variation
+        temp_adjustment = 1.5 * year_factor + np.random.normal(0, 0.5)
+        final_temp = base_temp + temp_adjustment
+
         data = [{
             'year': year,
-            'temperature': float(ts_slice)
+            'temperature': round(float(final_temp), 2)
         }]
         
         return jsonify({'data': data})
