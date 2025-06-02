@@ -227,11 +227,27 @@ const overlays = {
 let layerControl = null;
 
 function addLayerControl() {
+    // Remove existing layer control if it exists
+    if (layerControl) {
+        layerControl.remove();
+    }
+
+    // Create new layer control
     layerControl = L.control.layers(baseLayers, overlays, {
         position: 'topright',
         collapsed: false,
-        sortLayers: true
+        sortLayers: true,
+        hideSingleBase: false
     }).addTo(map);
+
+    // Force the layer control to be visible
+    setTimeout(() => {
+        const layerControlElement = document.querySelector('.leaflet-control-layers');
+        if (layerControlElement) {
+            layerControlElement.style.display = 'block';
+            layerControlElement.classList.add('leaflet-control-layers-expanded');
+        }
+    }, 100);
 }
 
 // Add initial layer control
@@ -245,3 +261,12 @@ L.control.attribution({
 
 // Initial update
 updateHeatmap();
+
+// Ensure layer control stays visible after map updates
+map.on('overlayremove overlayadd baselayerchange', () => {
+    const layerControlElement = document.querySelector('.leaflet-control-layers');
+    if (layerControlElement) {
+        layerControlElement.style.display = 'block';
+        layerControlElement.classList.add('leaflet-control-layers-expanded');
+    }
+});
