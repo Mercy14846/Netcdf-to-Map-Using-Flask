@@ -80,10 +80,13 @@ function initHeatLayer(data = []) {
         maxZoom: 8,
         max: 1.0,
         gradient: temperatureGradient,
-        minOpacity: 0.5,
-        maxOpacity: 0.8,
+        minOpacity: 0.6,
+        maxOpacity: 0.9,
         scaleRadius: true,
-        useLocalExtrema: false
+        useLocalExtrema: false,
+        latField: 'lat',
+        lngField: 'lon',
+        valueField: 'temperature'
     });
     
     // Add heatmap layer to map by default
@@ -103,13 +106,15 @@ function initHeatLayer(data = []) {
 function getAdaptiveRadius() {
     const zoom = map.getZoom();
     const pixelRatio = window.devicePixelRatio || 1;
-    return Math.max(15, Math.min(25, 20 * pixelRatio)) * (zoom < 4 ? 0.75 : 1);
+    // Increased base radius for better flow visualization
+    return Math.max(20, Math.min(35, 25 * pixelRatio)) * (zoom < 4 ? 0.8 : 1);
 }
 
 // Adaptive blur based on zoom level
 function getAdaptiveBlur() {
     const zoom = map.getZoom();
-    return zoom < 4 ? 10 : 15;
+    // Increased blur for smoother transitions
+    return zoom < 4 ? 15 : 20;
 }
 
 // Loading indicator functions
@@ -351,3 +356,40 @@ window.showError = showError;
 window.updateHeatmap = updateHeatmap;
 window.getAdaptiveRadius = getAdaptiveRadius;
 window.getAdaptiveBlur = getAdaptiveBlur;
+
+// Export functions for animation
+window.updateHeatmapLayer = function(points, transitionDuration = 500) {
+    if (!heatmapLayer) return;
+    
+    // Smoothly update the heatmap
+    requestAnimationFrame(() => {
+        heatmapLayer.setLatLngs(points);
+        
+        // Animate the blur and radius for flow effect
+        const currentRadius = heatmapLayer.options.radius;
+        const targetRadius = getAdaptiveRadius();
+        const radiusDiff = targetRadius - currentRadius;
+        
+        const startTime = performance.now();
+        
+        function animate(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / transitionDuration, 1);
+            
+            // Smooth easing function
+            const eased = 1 - Math.pow(1 - progress, 3);
+            
+            // Update radius and blur
+            heatmapLayer.setOptions({
+                radius: currentRadius + (radiusDiff * eased),
+                blur: getAdaptiveBlur() * (0.8 + (0.2 * eased))
+            });
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        }
+        
+        requestAnimationFrame(animate);
+    });
+};
