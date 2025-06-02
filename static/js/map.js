@@ -337,3 +337,17 @@ map.on('overlayremove overlayadd baselayerchange', () => {
         layerControlElement.classList.add('leaflet-control-layers-expanded');
     }
 });
+
+// Make necessary variables and functions available globally
+window.map = map;
+window.heatmapLayer = heatmapLayer;
+window.initHeatLayer = initHeatLayer;
+window.dataCache = dataCache;
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
+window.showError = showError;
+
+// Export functions for animation
+window.updateHeatmap = updateHeatmap;
+window.getAdaptiveRadius = getAdaptiveRadius;
+window.getAdaptiveBlur = getAdaptiveBlur;

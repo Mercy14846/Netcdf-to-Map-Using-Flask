@@ -11,11 +11,22 @@ const MAX_RETRIES = 3;
 const CACHE_SIZE = 50;
 const CHUNK_SIZE = 1000;
 
+// Debug logging
+const DEBUG = true;
+function log(...args) {
+    if (DEBUG) {
+        console.log('[Animation]', ...args);
+    }
+}
+
 // Initialize animation controls
 function initializeAnimation() {
+    log('Initializing animation controls...');
+    
     const controlPanel = L.control({ position: 'bottomright' });
     
     controlPanel.onAdd = function() {
+        log('Creating control panel...');
         const div = L.DomUtil.create('div', 'animation-control-panel');
         div.innerHTML = `
             <div class="animation-controls">
@@ -30,29 +41,34 @@ function initializeAnimation() {
     };
     
     controlPanel.addTo(map);
+    log('Control panel added to map');
     
     // Add event listeners
     document.getElementById('playPauseBtn').addEventListener('click', toggleAnimation);
     document.getElementById('timeSlider').addEventListener('input', handleSliderChange);
     
     // Load initial data
+    log('Loading initial animation data...');
     loadAnimationData();
 }
 
 // Load animation data with optimizations
 async function loadAnimationData(retryCount = 0) {
     try {
+        log('Loading animation data, attempt:', retryCount + 1);
         showLoading();
         
         // Check cache first
         const cacheKey = 'animation_data';
         if (dataCache.has(cacheKey)) {
+            log('Using cached animation data');
             animationData = dataCache.get(cacheKey);
             initializeAnimationControls();
             hideLoading();
             return;
         }
         
+        log('Fetching fresh animation data...');
         const response = await fetch('/api/animation-data', {
             headers: {
                 'Accept': 'application/json',
@@ -63,19 +79,23 @@ async function loadAnimationData(retryCount = 0) {
         if (!response.ok) throw new Error('Failed to load animation data');
         
         const rawData = await response.json();
+        log('Received raw data:', rawData);
         
         if (!rawData || !rawData.data || rawData.data.length === 0) {
             throw new Error('Invalid data format received');
         }
         
         // Process data in chunks
+        log('Processing animation data...');
         animationData = await processAnimationData(rawData);
+        log('Animation data processed:', animationData);
         
         // Cache the processed data
         dataCache.set(cacheKey, animationData);
         manageCache();
         
         // Initialize controls and start animation
+        log('Initializing controls and starting animation...');
         initializeAnimationControls();
         startAnimation();
         hideLoading();
@@ -84,7 +104,7 @@ async function loadAnimationData(retryCount = 0) {
         console.error('Error loading animation data:', error);
         
         if (retryCount < MAX_RETRIES) {
-            console.log(`Retrying data load (${retryCount + 1}/${MAX_RETRIES})...`);
+            log(`Retrying data load (${retryCount + 1}/${MAX_RETRIES})...`);
             setTimeout(() => {
                 loadAnimationData(retryCount + 1);
             }, RETRY_DELAY * (retryCount + 1));
@@ -238,4 +258,20 @@ function normalizeTemperature(temp) {
 }
 
 // Initialize animation when the page loads
-document.addEventListener('DOMContentLoaded', initializeAnimation); 
+document.addEventListener('DOMContentLoaded', () => {
+    log('DOM loaded, checking map initialization...');
+    if (typeof map !== 'undefined') {
+        log('Map is ready, initializing animation...');
+        initializeAnimation();
+    } else {
+        console.error('Map not initialized');
+        setTimeout(() => {
+            log('Retrying animation initialization...');
+            if (typeof map !== 'undefined') {
+                initializeAnimation();
+            } else {
+                showError('Failed to initialize map. Please refresh the page.');
+            }
+        }, 1000);
+    }
+}); 
