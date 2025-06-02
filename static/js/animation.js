@@ -2,7 +2,7 @@
 let animationData = null;
 let currentFrameIndex = 0;
 let animationInterval = null;
-let isPlaying = false;
+let isPlaying = true;
 
 // Animation speed in milliseconds (2 seconds per hour)
 const ANIMATION_SPEED = 2000;
