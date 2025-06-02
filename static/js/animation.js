@@ -4,8 +4,8 @@ let currentFrameIndex = 0;
 let animationInterval = null;
 let isPlaying = false;
 
-// Animation speed in milliseconds
-const ANIMATION_SPEED = 1000;
+// Animation speed in milliseconds (2 seconds per hour)
+const ANIMATION_SPEED = 2000;
 
 // Initialize animation controls
 function initializeAnimation() {
@@ -19,8 +19,8 @@ function initializeAnimation() {
                 <button id="playPauseBtn" title="Play/Pause">
                     <i class="fas fa-play"></i>
                 </button>
-                <input type="range" id="timeSlider" min="0" max="100" value="0">
-                <span id="currentDate"></span>
+                <input type="range" id="timeSlider" min="0" max="23" value="0">
+                <span id="currentTime"></span>
             </div>
         `;
         return div;
@@ -65,16 +65,15 @@ async function loadAnimationData() {
 function updateFrame(frameIndex) {
     if (!animationData) return;
     
-    const timestamp = animationData.timestamps[frameIndex];
-    document.getElementById('currentDate').textContent = timestamp;
+    const frameData = animationData.data[frameIndex];
+    document.getElementById('currentTime').textContent = frameData.hour;
     document.getElementById('timeSlider').value = frameIndex;
     
     // Update heatmap layer
-    const frameData = animationData.data.filter(d => d.time === timestamp);
-    const points = frameData.map(point => [
-        point.latitude,
-        point.longitude,
-        normalizeTemperature(point[temp_var])
+    const points = frameData.points.map(point => [
+        point.lat,
+        point.lon,
+        normalizeTemperature(point.temperature)
     ]);
     
     initHeatLayer(points);

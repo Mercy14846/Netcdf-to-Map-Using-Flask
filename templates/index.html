@@ -159,14 +159,20 @@
 
     <!-- Loading Overlay -->
     <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner">Loading temperature data...</div>
+        <div class="loading-spinner">Loading hourly temperature data...</div>
     </div>
 
     <!-- Error Message -->
     <div id="error-message" class="error-message"></div>
 
+    <!-- Time Display -->
+    <div class="time-display">
+        <div class="current-hour">Current Time: <span id="currentTime">00:00</span></div>
+    </div>
+
     <!-- Temperature Legend -->
     <div class="legend">
+        <div class="legend-title">Temperature Scale</div>
         <div class="legend-gradient"></div>
         <div class="legend-labels">
             <div>40°C</div>
