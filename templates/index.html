@@ -39,42 +39,33 @@
         }
 
         .legend {
-            position: absolute;
-            bottom: 30px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 10px;
-            border-radius: 4px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            position: fixed !important;
+            bottom: 90px !important;
+            right: 20px !important;
+            background: white !important;
+            padding: 10px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
             z-index: 1000;
-            font-size: 12px;
+            min-width: 300px;
         }
 
         .legend-gradient {
-            width: 20px;
-            height: 200px;
-            margin-right: 10px;
-            float: left;
-            background: linear-gradient(
-                to bottom,
-                #FF1700,  /* Hot */
-                #FF6B00,  /* Warm */
-                #FFB300,  /* Orange */
-                #FFFF00,  /* Yellow */
-                #8FFF75,  /* Light Green */
-                #80FFE5,  /* Cyan */
-                #6CCDFF,  /* Light Cyan */
-                #51B8FF,  /* Cyan Blue */
-                #3D9EFF,  /* Light Blue */
-                #2B65EC,  /* Deep Blue */
-                #91319A   /* Cold Purple */
+            height: 10px;
+            margin: 5px 0;
+            background: linear-gradient(to right,
+                #91319A, #2B65EC, #3D9EFF, #51B8FF, #6CCDFF,
+                #80FFE5, #8FFF75, #FFFF00, #FFB300, #FF6B00, #FF1700
             );
+            border-radius: 4px;
         }
 
         .legend-labels {
-            float: left;
-            line-height: 20px;
-            color: #333;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
         }
 
         .loading-overlay {
@@ -152,6 +143,15 @@
             background: rgba(255, 255, 255, 0.95) !important;
             font-size: 11px !important;
         }
+
+        @media (max-width: 768px) {
+            .legend {
+                min-width: 250px;
+                max-width: calc(100% - 40px);
+                bottom: 80px !important;
+                right: 10px !important;
+            }
+        }
     </style>
   </head>
   <body>
@@ -170,22 +170,13 @@
         <div class="current-hour">Current Time: <span id="currentTime">00:00</span></div>
     </div>
 
-    <!-- Temperature Legend -->
+    <!-- Temperature Scale -->
     <div class="legend">
-        <div class="legend-title">Temperature Scale</div>
         <div class="legend-gradient"></div>
         <div class="legend-labels">
-            <div>40°C</div>
-            <div>32°C</div>
-            <div>24°C</div>
-            <div>16°C</div>
-            <div>8°C</div>
-            <div>0°C</div>
-            <div>-8°C</div>
-            <div>-16°C</div>
-            <div>-24°C</div>
-            <div>-32°C</div>
-            <div>-40°C</div>
+            <span>-40°C</span>
+            <span>0°C</span>
+            <span>40°C</span>
         </div>
     </div>
 
