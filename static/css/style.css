@@ -428,4 +428,94 @@ html, body {
     justify-content: space-between;
     font-size: 12px;
     color: #333;
+}
+
+/* Time display styles */
+.time-display {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.9);
+    padding: 10px 20px;
+    border-radius: 4px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    z-index: 1000;
+    text-align: center;
+}
+
+.current-hour {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+
+#currentTime {
+    font-weight: bold;
+    color: #1a73e8;
+}
+
+/* Update animation controls for hourly display */
+.animation-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 5px;
+}
+
+#timeSlider {
+    flex: 1;
+    min-width: 200px;
+    height: 6px;
+    -webkit-appearance: none;
+    background: #ddd;
+    border-radius: 3px;
+    outline: none;
+}
+
+#timeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #1a73e8;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#timeSlider::-webkit-slider-thumb:hover {
+    background: #1557b0;
+}
+
+#timeSlider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #1a73e8;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#timeSlider::-moz-range-thumb:hover {
+    background: #1557b0;
+}
+
+/* Responsive styles for time display */
+@media (max-width: 768px) {
+    .time-display {
+        top: auto;
+        bottom: 20px;
+        width: 90%;
+        max-width: 300px;
+    }
+    
+    .animation-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    #timeSlider {
+        min-width: 150px;
+    }
 } 
