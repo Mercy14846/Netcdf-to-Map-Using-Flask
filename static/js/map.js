@@ -6,6 +6,15 @@ const TEMPERATURE_RANGE = {
     MAX: 40
 };
 
+// Memory management
+let currentData = null;
+let dataCache = new Map();
+const MAX_CACHE_SIZE = 50;
+
+// Debounce configuration
+const DEBOUNCE_DELAY = 250;
+const CHUNK_SIZE = 1000;
+
 // Initialize variables
 let currentYear = 2024;
 let heatmapLayer = null;
@@ -129,20 +138,82 @@ function showError(message, duration = 5000) {
     }, duration);
 }
 
-// Update heatmap data with error handling and retry
+// Cache management
+function manageCache() {
+    if (dataCache.size > MAX_CACHE_SIZE) {
+        const oldestKey = dataCache.keys().next().value;
+        dataCache.delete(oldestKey);
+    }
+}
+
+// Chunk processing
+function processDataChunks(data, chunkSize = CHUNK_SIZE) {
+    const chunks = [];
+    for (let i = 0; i < data.length; i += chunkSize) {
+        chunks.push(data.slice(i, i + chunkSize));
+    }
+    return chunks;
+}
+
+// Optimized data processing
+async function processChunkAsync(chunk) {
+    return chunk.map(point => {
+        const normalizedTemp = (point.temperature - TEMPERATURE_RANGE.MIN) / 
+                             (TEMPERATURE_RANGE.MAX - TEMPERATURE_RANGE.MIN);
+        return [
+            point.lat,
+            point.lon,
+            Math.max(0, Math.min(1, normalizedTemp))
+        ];
+    });
+}
+
+// Update heatmap with chunked processing
+async function updateHeatmapOptimized(data) {
+    const chunks = processDataChunks(data);
+    const processedChunks = [];
+    
+    for (const chunk of chunks) {
+        const processed = await processChunkAsync(chunk);
+        processedChunks.push(...processed);
+        
+        // Update visualization incrementally
+        if (heatmapLayer) {
+            heatmapLayer.setLatLngs(processedChunks);
+        }
+        
+        // Allow UI updates
+        await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    
+    return processedChunks;
+}
+
+// Optimized heatmap update with caching and retry
 async function updateHeatmap(retryCount = 0) {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY = 1000; // 1 second
+    const RETRY_DELAY = 1000;
 
     try {
         showLoading();
 
         const bounds = map.getBounds();
+        const cacheKey = `${bounds.getNorth()}_${bounds.getSouth()}_${bounds.getEast()}_${bounds.getWest()}_${map.getZoom()}`;
+        
+        // Check cache first
+        if (dataCache.has(cacheKey)) {
+            const cachedData = dataCache.get(cacheKey);
+            initHeatLayer(cachedData);
+            hideLoading();
+            return;
+        }
+
         const response = await fetch('/api/heatmap-data', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Cache-Control': 'max-age=3600'
             },
             body: JSON.stringify({
                 bounds: {
@@ -163,17 +234,14 @@ async function updateHeatmap(retryCount = 0) {
             throw new Error(data.error);
         }
 
-        const points = data.data.map(point => {
-            const normalizedTemp = (point.temperature - TEMPERATURE_RANGE.MIN) / 
-                                 (TEMPERATURE_RANGE.MAX - TEMPERATURE_RANGE.MIN);
-            return [
-                point.lat,
-                point.lon,
-                Math.max(0, Math.min(1, normalizedTemp)) // Ensure value is between 0 and 1
-            ];
-        });
+        // Process data in chunks
+        const processedData = await updateHeatmapOptimized(data.data);
+        
+        // Cache the processed data
+        dataCache.set(cacheKey, processedData);
+        manageCache();
 
-        initHeatLayer(points);
+        initHeatLayer(processedData);
         hideLoading();
 
     } catch (error) {

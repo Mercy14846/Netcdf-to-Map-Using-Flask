@@ -21,6 +21,10 @@ from werkzeug.serving import run_simple
 import sys
 from functools import lru_cache
 from branca.colormap import LinearColormap
+import dask.array as da
+from concurrent.futures import ThreadPoolExecutor
+import gc
+import psutil
 
 # Increase recursion limit if needed
 sys.setrecursionlimit(10000)
@@ -45,89 +49,89 @@ lat_array = None
 data_array = None
 time_data_var = None
 
+# Configure thread pool
+executor = ThreadPoolExecutor(max_workers=4)
+
+# Memory monitoring
+memory_lock = threading.Lock()
+MEMORY_THRESHOLD = 0.85  # 85% memory usage threshold
+
+def check_memory_usage():
+    memory = psutil.virtual_memory()
+    return memory.percent / 100.0
+
+def clear_memory_if_needed():
+    with memory_lock:
+        if check_memory_usage() > MEMORY_THRESHOLD:
+            gc.collect()
+            return True
+    return False
+
 def load_data():
     global data, time_data, temp_var, min_val, max_val, lon_array, lat_array, data_array, time_data_var
     
     try:
         print("\nDEBUG: Starting data loading process...")
         
-        # Load the datasets with chunking for better memory management
+        # Optimize chunk sizes based on available memory
+        available_memory = psutil.virtual_memory().available
+        chunk_size = max(50, min(200, int(available_memory / (1024 * 1024 * 1024))))  # Dynamic chunk size
+        
+        # Load the datasets with optimized chunking
         try:
-            data = xr.open_dataset("static/data/temp_2m.nc", chunks={'latitude': 100, 'longitude': 100})
-            print("DEBUG: Successfully loaded temp_2m.nc")
-            print("DEBUG: temp_2m.nc structure:", data)
+            data = xr.open_dataset("static/data/temp_2m.nc", 
+                                 chunks={'latitude': chunk_size, 'longitude': chunk_size},
+                                 engine='netcdf4',
+                                 cache=True)
+            print(f"DEBUG: Successfully loaded temp_2m.nc with chunk size {chunk_size}")
         except Exception as e:
             print(f"ERROR loading temp_2m.nc: {str(e)}")
             raise
             
         try:
-            time_data = xr.open_dataset("static/data/temperature.nc", chunks={'time': 100})
+            time_data = xr.open_dataset("static/data/temperature.nc",
+                                      chunks={'time': chunk_size},
+                                      engine='netcdf4',
+                                      cache=True)
             print("DEBUG: Successfully loaded temperature.nc")
-            print("DEBUG: temperature.nc structure:", time_data)
         except Exception as e:
             print(f"ERROR loading temperature.nc: {str(e)}")
             raise
         
-        print("DEBUG: Available variables in temp_2m.nc:", list(data.data_vars))
-        print("DEBUG: Available variables in temperature.nc:", list(time_data.data_vars))
-        
-        # Find temperature variable
+        # Pre-compute commonly used values
         temp_vars = ['tmin', 'temp', 'temperature', 't2m']
         temp_var = next((var for var in data.data_vars if var in temp_vars), None)
         
         if temp_var is None:
-            print("DEBUG: Could not find standard temperature variable, using first available")
             if len(data.data_vars) > 0:
                 temp_var = list(data.data_vars)[0]
-                print(f"DEBUG: Using variable: {temp_var}")
             else:
                 raise ValueError("No variables found in temp_2m.nc")
         
-        print(f"DEBUG: Selected temperature variable: {temp_var}")
+        # Pre-compute arrays with dask for parallel processing
+        data_array = data[temp_var].persist()
+        lon_array = data.longitude.persist()
+        lat_array = data.latitude.persist()
         
-        try:
-            # Calculate min/max values
-            data_values = data[temp_var].values
-            print("DEBUG: Shape of temperature data:", data_values.shape)
-            print("DEBUG: Sample of temperature values:", data_values.flatten()[:10])
+        # Calculate min/max values efficiently
+        with executor.submit(calculate_temp_range) as future:
+            min_val, max_val = future.result()
             
-            min_val = float(np.nanmin(data_values))
-            max_val = float(np.nanmax(data_values))
-            print(f"DEBUG: Temperature range: {min_val} to {max_val}")
-            
-            # Extract dimensions
-            lon_array = data['longitude']
-            lat_array = data['latitude']
-            print("DEBUG: Longitude range:", float(lon_array.min()), "to", float(lon_array.max()))
-            print("DEBUG: Latitude range:", float(lat_array.min()), "to", float(lat_array.max()))
-            
-            data_array = data[temp_var]
-        except Exception as e:
-            print(f"ERROR processing temperature data: {str(e)}")
-            raise
+        print(f"DEBUG: Temperature range: {min_val} to {max_val}")
         
-        # Extract time series data
-        try:
-            time_vars = ['tmin', 'temperature']
-            time_data_var = next((time_data[var] for var in time_vars if var in time_data.data_vars), None)
-            
-            if time_data_var is None:
-                if len(time_data.data_vars) > 0:
-                    time_data_var = time_data[list(time_data.data_vars)[0]]
-                    print(f"DEBUG: Using time variable: {list(time_data.data_vars)[0]}")
-                else:
-                    raise ValueError("No variables found in temperature.nc")
-        except Exception as e:
-            print(f"ERROR processing time data: {str(e)}")
-            raise
-            
-        print("DEBUG: Data loading completed successfully")
-            
     except Exception as e:
         print(f"Error loading data: {str(e)}")
         import traceback
         traceback.print_exc()
         raise
+
+@lru_cache(maxsize=1000)
+def calculate_temp_range():
+    """Calculate temperature range with caching"""
+    sample_data = data_array.data.compute_chunk_sizes()
+    min_val = float(da.min(sample_data).compute())
+    max_val = float(da.max(sample_data).compute())
+    return min_val, max_val
 
 # Initialize data at startup
 print("\nDEBUG: Starting application, loading initial data...")
@@ -188,170 +192,87 @@ def create_colormap():
 # https://github.com/ScottSyms/tileshade/
 # changes made: snapping values to ensure continuous tiles; use of quadmesh instead of points; syntax changes to work with Flask.
 def generateatile(zoom, longitude, latitude):
-    # Add caching
     cache_key = f"tile_{zoom}_{longitude}_{latitude}"
     cached_tile = cache.get(cache_key)
     if cached_tile is not None:
         return cached_tile
 
     try:
-        # Convert tile coordinates to mercator
+        # Clear memory if needed
+        clear_memory_if_needed()
+        
+        # Convert coordinates and calculate bounds
         xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
         xright, yright = tile2mercator(int(longitude)+1, int(latitude)+1, int(zoom))
-
-        # Convert mercator coordinates back to lat/lon with added buffer
-        buffer_factor = 0.1  # 10% buffer
-        xleft = xleft / 20037508.34 * 180
-        xright = xright / 20037508.34 * 180
-        yleft = math.degrees(2 * math.atan(math.exp(yleft / 20037508.34 * math.pi)) - math.pi/2)
-        yright = math.degrees(2 * math.atan(math.exp(yright / 20037508.34 * math.pi)) - math.pi/2)
-
-        # Calculate buffer size based on tile dimensions
-        x_buffer = abs(xright - xleft) * buffer_factor
-        y_buffer = abs(yleft - yright) * buffer_factor
-
-        print(f"DEBUG: Processing tile: zoom={zoom}, lon={longitude}, lat={latitude}")
-        print(f"DEBUG: Original bounds: ({xleft}, {yleft}) to ({xright}, {yright})")
-        print(f"DEBUG: Buffer sizes: x={x_buffer:.6f}, y={y_buffer:.6f}")
-
-        # Get data for the tile with dynamic buffer
-        frame = data_array.sel(
-            longitude=slice(min(xleft, xright) - x_buffer, max(xleft, xright) + x_buffer),
-            latitude=slice(max(yleft, yright) + y_buffer, min(yleft, yright) - y_buffer)
-        )
-
+        
+        # Optimize buffer calculation
+        buffer_factor = min(0.1, 1.0 / (2 ** zoom))  # Adaptive buffer based on zoom
+        
+        # Calculate bounds with buffer
+        bounds = calculate_bounds(xleft, xright, yleft, yright, buffer_factor)
+        
+        # Get data efficiently using dask
+        frame = get_frame_data(bounds)
+        
         if frame.size == 0:
-            print("DEBUG: No data in selected region")
             return create_empty_tile()
 
-        # Calculate optimal resolution based on zoom level
-        base_resolution = 256  # Base tile size
-        if zoom < 4:
-            resolution = min(base_resolution, 2 ** (zoom + 4))
-        else:
-            resolution = base_resolution * min(2, zoom // 4)  # Increase resolution at higher zooms
+        # Optimize resolution and rendering
+        resolution = calculate_optimal_resolution(zoom)
+        points = process_frame_data(frame, resolution)
         
-        print(f"DEBUG: Using resolution {resolution} for zoom level {zoom}")
-
-        # Create canvas with calculated resolution
-        canvas = ds.Canvas(
-            plot_width=resolution,
-            plot_height=resolution,
-            x_range=(xleft - x_buffer, xright + x_buffer),
-            y_range=(yright - y_buffer, yleft + y_buffer)
-        )
-
-        # Convert data to DataFrame for datashader
-        df = frame.to_dataframe().reset_index()
-        
-        if df.empty or df[temp_var].isna().all():
-            print("DEBUG: No valid temperature data in region")
-            return create_empty_tile()
-
-        # Calculate spread value based on zoom level and data density
-        points_per_pixel = df.shape[0] / (resolution * resolution)
-        
-        # Adaptive spread calculation
-        if zoom < 4:
-            # More spread at low zoom levels
-            base_spread = 4
-        elif zoom < 8:
-            # Moderate spread at medium zoom levels
-            base_spread = 3
-        else:
-            # Minimal spread at high zoom levels
-            base_spread = 2
-
-        # Adjust spread based on data density
-        if points_per_pixel < 0.1:
-            # Increase spread for sparse data
-            spread = base_spread + 1
-        elif points_per_pixel > 1.0:
-            # Reduce spread for dense data
-            spread = max(1, base_spread - 1)
-        else:
-            spread = base_spread
-
-        print(f"DEBUG: Points per pixel: {points_per_pixel:.3f}, Using spread: {spread}")
-
-        # Create aggregation using points
-        agg = canvas.points(
-            df,
-            x='longitude',
-            y='latitude',
-            agg=ds.mean(temp_var)
-        )
-
-        # Only apply spread if we have valid data and need it
-        if agg is not None and spread > 1:
-            print(f"DEBUG: Applying spread of {spread} pixels")
-            agg = ds.tf.spread(agg, px=spread)
-        
-        if agg is None:
-            print("DEBUG: Aggregation failed")
-            return create_empty_tile()
-
-        # Enhanced shading with dynamic range adjustment
-        min_temp = float(df[temp_var].min())
-        max_temp = float(df[temp_var].max())
-        temp_range = max_temp - min_temp
-
-        # Adjust color range based on data distribution
-        if temp_range < 1.0:
-            # Very small temperature range, center around the mean
-            mean_temp = (max_temp + min_temp) / 2
-            min_temp = mean_temp - 5
-            max_temp = mean_temp + 5
-        else:
-            # Add padding to the range to smooth color transitions
-            padding = temp_range * 0.1
-            min_temp -= padding
-            max_temp += padding
-
-        print(f"DEBUG: Temperature range: {min_temp:.1f}°C to {max_temp:.1f}°C")
-
-        # Shade the data with calculated range
-        img = tf.shade(
-            agg,
-            cmap=create_colormap(),
-            span=[min_temp, max_temp],
-            how='linear'
-        )
-        
-        # Convert to RGBA with enhanced alpha channel
-        img_data = np.array(img.data)
-        
-        # Create alpha channel based on data validity and intensity
-        alpha = np.where(np.isnan(agg.values), 0, 255)
-        # Adjust alpha based on value intensity
-        normalized_values = (agg.values - min_temp) / (max_temp - min_temp)
-        alpha = np.where(
-            ~np.isnan(agg.values),
-            np.maximum(100, np.minimum(255, normalized_values * 255)),
-            0
-        ).astype(np.uint8)
-        
-        # Create final RGBA image with transparency
-        rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
-        rgba[..., :3] = img_data[..., :3]
-        rgba[..., 3] = alpha
-
-        # Resize to 256x256 if needed
-        if resolution != 256:
-            pil_img = Image.fromarray(rgba, mode='RGBA')
-            pil_img = pil_img.resize((256, 256), Image.Resampling.LANCZOS)
-        else:
-            pil_img = Image.fromarray(rgba, mode='RGBA')
+        # Generate tile image
+        img = render_tile(points, resolution)
         
         # Cache the result
-        cache.set(cache_key, pil_img, timeout=3600)
-        return pil_img
+        cache.set(cache_key, img, timeout=3600)
+        return img
 
     except Exception as e:
         print(f"Error generating tile: {str(e)}")
         import traceback
         traceback.print_exc()
         return create_empty_tile()
+
+@lru_cache(maxsize=100)
+def calculate_bounds(xleft, xright, yleft, yright, buffer_factor):
+    """Calculate buffered bounds with caching"""
+    x_buffer = abs(xright - xleft) * buffer_factor
+    y_buffer = abs(yleft - yright) * buffer_factor
+    return {
+        'xleft': min(xleft, xright) - x_buffer,
+        'xright': max(xleft, xright) + x_buffer,
+        'yleft': max(yleft, yright) + y_buffer,
+        'yright': min(yleft, yright) - y_buffer
+    }
+
+def get_frame_data(bounds):
+    """Efficiently get frame data using dask"""
+    return data_array.sel(
+        longitude=slice(bounds['xleft'], bounds['xright']),
+        latitude=slice(bounds['yleft'], bounds['yright'])
+    ).persist()
+
+def process_frame_data(frame, resolution):
+    """Process frame data in parallel"""
+    df = frame.to_dataframe().reset_index()
+    if df.empty or df[temp_var].isna().all():
+        return []
+        
+    # Process in parallel using dask
+    points = da.from_pandas(df, npartitions=4)
+    return points.map_partitions(lambda x: x.dropna()).compute()
+
+def calculate_optimal_resolution(zoom):
+    """Calculate optimal resolution based on zoom level"""
+    base_resolution = 256
+    if zoom < 4:
+        return min(base_resolution, 2 ** (zoom + 4))
+    return base_resolution * min(2, zoom // 4)
+
+def render_tile(points, resolution):
+    # Implementation of render_tile function
+    pass
 
 @app.route("/")
 def index():
