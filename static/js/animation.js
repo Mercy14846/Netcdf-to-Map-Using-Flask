@@ -177,6 +177,12 @@ function initializeAnimationControls() {
     slider.max = animationData.timestamps.length - 1;
     slider.value = currentFrameIndex;
     updateFrame(currentFrameIndex);
+    
+    // Start playing automatically
+    isPlaying = true;
+    const playPauseBtn = document.getElementById('playPauseBtn');
+    playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+    startAnimation();
 }
 
 // Update frame with optimized rendering
