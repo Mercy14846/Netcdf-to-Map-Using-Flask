@@ -20,6 +20,7 @@ from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.serving import run_simple
 import sys
 from functools import lru_cache
+from branca.colormap import LinearColormap
 
 # Increase recursion limit if needed
 sys.setrecursionlimit(10000)
@@ -696,6 +697,98 @@ WEATHER_PARAMS = {
         'units': 'm/s'
     }
 }
+
+def kelvin_to_celsius(temp_k):
+    """Convert temperature from Kelvin to Celsius"""
+    return temp_k - 273.15
+
+def process_netcdf_data():
+    """Process NetCDF data into a tidy DataFrame with hourly timestamps"""
+    global data, time_data, temp_var, min_val, max_val
+    
+    try:
+        # Convert xarray datasets to pandas DataFrames
+        temp_2m_df = data[temp_var].to_dataframe().reset_index()
+        
+        # Create hourly timestamps for a day
+        hours = pd.date_range('2024-01-01', periods=24, freq='H')
+        temp_2m_df['hour'] = pd.DataFrame({'hour': hours}).iloc[temp_2m_df.index % 24].values
+        
+        # Convert temperatures from Kelvin to Celsius if needed
+        if min_val > 100:  # Simple check if data is in Kelvin
+            temp_2m_df[temp_var] = temp_2m_df[temp_var].apply(kelvin_to_celsius)
+            
+            # Update global min/max values
+            min_val = float(temp_2m_df[temp_var].min())
+            max_val = float(temp_2m_df[temp_var].max())
+        
+        # Create temperature class intervals for visualization
+        n_classes = 11  # Number of classes for the color palette
+        class_interval = (max_val - min_val) / (n_classes - 1)
+        temp_classes = [min_val + i * class_interval for i in range(n_classes)]
+        
+        # Create color palette (reversed Spectral)
+        colors = ['#9e0142', '#d53e4f', '#f46d43', '#fdae61', '#fee08b',
+                 '#ffffbf', '#e6f598', '#abdda4', '#66c2a5', '#3288bd', '#5e4fa2'][::-1]
+        
+        # Create color map
+        temp_colormap = LinearColormap(
+            colors=colors,
+            vmin=min_val,
+            vmax=max_val,
+            caption='Temperature (°C)'
+        )
+        
+        return {
+            'temp_df': temp_2m_df,
+            'temp_classes': temp_classes,
+            'colormap': temp_colormap,
+            'hours': hours.strftime('%H:%M').tolist()
+        }
+    except Exception as e:
+        print(f"Error processing NetCDF data: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+@app.route('/api/animation-data')
+@cache.memoize(timeout=3600)  # Cache for 1 hour
+def get_animation_data():
+    """Endpoint to get processed temperature data for animation"""
+    try:
+        processed_data = process_netcdf_data()
+        
+        # Prepare data for animation
+        animation_data = {
+            'timestamps': processed_data['hours'],  # Hourly timestamps
+            'temperature_range': {
+                'min': min_val,
+                'max': max_val,
+                'classes': processed_data['temp_classes']
+            },
+            'colors': processed_data['colormap'].colors,
+            'data': []
+        }
+        
+        # Organize data by hour
+        df = processed_data['temp_df']
+        for hour in processed_data['hours']:
+            hour_data = df[df['hour'].dt.strftime('%H:%M') == hour]
+            points = []
+            for _, row in hour_data.iterrows():
+                points.append({
+                    'lat': float(row['latitude']),
+                    'lon': float(row['longitude']),
+                    'temperature': float(row[temp_var])
+                })
+            animation_data['data'].append({
+                'hour': hour,
+                'points': points
+            })
+        
+        return jsonify(animation_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Run the app on all network interfaces (0.0.0.0)
