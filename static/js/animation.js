@@ -3,15 +3,17 @@ let animationData = null;
 let currentFrameIndex = 0;
 let animationInterval = null;
 let isPlaying = false;
+let dataCache = new Map();
 
-// Animation speed in milliseconds (2 seconds per hour)
-const ANIMATION_SPEED = 2000;
+// Animation configuration
+const ANIMATION_SPEED = 2000;  // 2 seconds per frame
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 3;
+const CACHE_SIZE = 50;
+const CHUNK_SIZE = 1000;
 
 // Initialize animation controls
 function initializeAnimation() {
-    // Create animation control panel
     const controlPanel = L.control({ position: 'bottomright' });
     
     controlPanel.onAdd = function() {
@@ -19,10 +21,10 @@ function initializeAnimation() {
         div.innerHTML = `
             <div class="animation-controls">
                 <button id="playPauseBtn" title="Play/Pause">
-                    <i class="fas fa-pause"></i>
+                    <i class="fas fa-play"></i>
                 </button>
                 <input type="range" id="timeSlider" min="0" max="23" value="0">
-                <span id="currentTime"></span>
+                <span id="currentTime">00:00</span>
             </div>
         `;
         return div;
@@ -34,36 +36,48 @@ function initializeAnimation() {
     document.getElementById('playPauseBtn').addEventListener('click', toggleAnimation);
     document.getElementById('timeSlider').addEventListener('input', handleSliderChange);
     
-    // Load animation data
+    // Load initial data
     loadAnimationData();
 }
 
-// Load temperature data for animation with retry mechanism
+// Load animation data with optimizations
 async function loadAnimationData(retryCount = 0) {
     try {
         showLoading();
+        
+        // Check cache first
+        const cacheKey = 'animation_data';
+        if (dataCache.has(cacheKey)) {
+            animationData = dataCache.get(cacheKey);
+            initializeAnimationControls();
+            hideLoading();
+            return;
+        }
+        
         const response = await fetch('/api/animation-data', {
             headers: {
                 'Accept': 'application/json',
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'max-age=3600'
             }
         });
         
         if (!response.ok) throw new Error('Failed to load animation data');
         
-        animationData = await response.json();
+        const rawData = await response.json();
         
-        if (!animationData || !animationData.data || animationData.data.length === 0) {
+        if (!rawData || !rawData.data || rawData.data.length === 0) {
             throw new Error('Invalid data format received');
         }
         
-        // Initialize slider
-        const slider = document.getElementById('timeSlider');
-        slider.max = animationData.timestamps.length - 1;
-        slider.value = 0;
+        // Process data in chunks
+        animationData = await processAnimationData(rawData);
         
-        // Show initial frame and start animation
-        updateFrame(0);
+        // Cache the processed data
+        dataCache.set(cacheKey, animationData);
+        manageCache();
+        
+        // Initialize controls and start animation
+        initializeAnimationControls();
         startAnimation();
         hideLoading();
         
@@ -82,19 +96,72 @@ async function loadAnimationData(retryCount = 0) {
     }
 }
 
-// Start animation automatically
-function startAnimation() {
-    if (!isPlaying) {
-        isPlaying = true;
-        document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
-        animationInterval = setInterval(() => {
-            currentFrameIndex = (currentFrameIndex + 1) % animationData.timestamps.length;
-            updateFrame(currentFrameIndex);
-        }, ANIMATION_SPEED);
+// Process animation data in chunks
+async function processAnimationData(rawData) {
+    const processedData = {
+        timestamps: rawData.timestamps,
+        temperature_range: rawData.temperature_range,
+        colors: rawData.colors,
+        data: []
+    };
+    
+    // Process each frame's data in chunks
+    for (const frame of rawData.data) {
+        const chunks = chunkArray(frame.points, CHUNK_SIZE);
+        const processedPoints = [];
+        
+        for (const chunk of chunks) {
+            const processed = await processPointsChunk(chunk);
+            processedPoints.push(...processed);
+            
+            // Allow UI updates
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        
+        processedData.data.push({
+            hour: frame.hour,
+            points: processedPoints
+        });
+    }
+    
+    return processedData;
+}
+
+// Process a chunk of points
+function processPointsChunk(points) {
+    return points.map(point => ({
+        lat: point.lat,
+        lon: point.lon,
+        temperature: normalizeTemperature(point.temperature)
+    }));
+}
+
+// Split array into chunks
+function chunkArray(array, size) {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += size) {
+        chunks.push(array.slice(i, i + size));
+    }
+    return chunks;
+}
+
+// Manage cache size
+function manageCache() {
+    if (dataCache.size > CACHE_SIZE) {
+        const oldestKey = dataCache.keys().next().value;
+        dataCache.delete(oldestKey);
     }
 }
 
-// Update the map with current frame data
+// Initialize animation controls
+function initializeAnimationControls() {
+    const slider = document.getElementById('timeSlider');
+    slider.max = animationData.timestamps.length - 1;
+    slider.value = 0;
+    updateFrame(0);
+}
+
+// Update frame with optimized rendering
 function updateFrame(frameIndex) {
     if (!animationData) return;
     
@@ -102,50 +169,67 @@ function updateFrame(frameIndex) {
     document.getElementById('currentTime').textContent = frameData.hour;
     document.getElementById('timeSlider').value = frameIndex;
     
-    // Update heatmap layer
-    const points = frameData.points.map(point => [
-        point.lat,
-        point.lon,
-        normalizeTemperature(point.temperature)
-    ]);
-    
-    initHeatLayer(points);
-}
-
-// Normalize temperature value to 0-1 range for heatmap
-function normalizeTemperature(temp) {
-    const { min, max } = animationData.temperature_range;
-    return (temp - min) / (max - min);
-}
-
-// Toggle animation play/pause
-function toggleAnimation() {
-    const btn = document.getElementById('playPauseBtn');
-    
-    if (isPlaying) {
-        clearInterval(animationInterval);
-        btn.innerHTML = '<i class="fas fa-play"></i>';
-    } else {
-        animationInterval = setInterval(() => {
-            currentFrameIndex = (currentFrameIndex + 1) % animationData.timestamps.length;
-            updateFrame(currentFrameIndex);
-        }, ANIMATION_SPEED);
-        btn.innerHTML = '<i class="fas fa-pause"></i>';
+    // Update heatmap layer efficiently
+    if (heatmapLayer) {
+        const points = frameData.points.map(point => [
+            point.lat,
+            point.lon,
+            point.temperature
+        ]);
+        
+        requestAnimationFrame(() => {
+            heatmapLayer.setLatLngs(points);
+        });
     }
+}
+
+// Toggle animation playback
+function toggleAnimation() {
+    if (!animationData) return;
     
     isPlaying = !isPlaying;
-}
-
-// Handle manual slider change
-function handleSliderChange(event) {
-    currentFrameIndex = parseInt(event.target.value);
-    updateFrame(currentFrameIndex);
+    const btn = document.getElementById('playPauseBtn');
+    btn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
     
-    // Pause animation when manually changing time
     if (isPlaying) {
-        toggleAnimation();
+        startAnimation();
+    } else {
+        stopAnimation();
     }
 }
 
-// Initialize animation when the map is ready
+// Start animation with performance optimization
+function startAnimation() {
+    if (!isPlaying || !animationData) return;
+    
+    animationInterval = setInterval(() => {
+        currentFrameIndex = (currentFrameIndex + 1) % animationData.timestamps.length;
+        requestAnimationFrame(() => {
+            updateFrame(currentFrameIndex);
+        });
+    }, ANIMATION_SPEED);
+}
+
+// Stop animation
+function stopAnimation() {
+    if (animationInterval) {
+        clearInterval(animationInterval);
+        animationInterval = null;
+    }
+}
+
+// Handle slider changes
+function handleSliderChange(e) {
+    currentFrameIndex = parseInt(e.target.value);
+    updateFrame(currentFrameIndex);
+}
+
+// Normalize temperature value
+function normalizeTemperature(temp) {
+    const min = animationData.temperature_range.min;
+    const max = animationData.temperature_range.max;
+    return Math.max(0, Math.min(1, (temp - min) / (max - min)));
+}
+
+// Initialize animation when the page loads
 document.addEventListener('DOMContentLoaded', initializeAnimation); 
