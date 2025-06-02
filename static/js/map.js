@@ -41,13 +41,23 @@ const mapConfig = {
 // Initialize the map
 const map = L.map('map', mapConfig);
 
-// Add base layer with retina support
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    maxZoom: 9,
-    attribution: '©OpenStreetMap, ©CartoDB',
-    subdomains: 'abcd',  // Use all available subdomains
-    detectRetina: true   // Support for retina displays
-}).addTo(map);
+// Base layers
+const baseLayers = {
+    'Light': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 9,
+        attribution: '©OpenStreetMap, ©CartoDB',
+        subdomains: 'abcd',  // Use all available subdomains
+        detectRetina: true   // Support for retina displays
+    }),
+    'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 9,
+        attribution: '©Esri',
+        detectRetina: true   // Support for retina displays
+    })
+};
+
+// Add default base layer
+baseLayers['Light'].addTo(map);
 
 // Initialize heatmap layer with optimized settings
 function initHeatLayer(data = []) {
@@ -197,36 +207,21 @@ L.control.zoom({
     position: 'bottomleft'
 }).addTo(map);
 
+// Layer control with base layers and overlay
+const overlays = {
+    'Temperature Layer': heatmapLayer
+};
+
+L.control.layers(baseLayers, overlays, {
+    position: 'topright',
+    collapsed: false
+}).addTo(map);
+
 // Attribution control
 L.control.attribution({
     position: 'bottomright',
     prefix: '© Temperature Data'
 }).addTo(map);
-
-// Layer control
-const layerControl = L.control({position: 'topright'});
-layerControl.onAdd = function() {
-    const div = L.DomUtil.create('div', 'layer-control');
-    div.innerHTML = `
-        <div class="layer-toggle">
-            <label>
-                <input type="checkbox" checked> Temperature Layer
-            </label>
-        </div>
-    `;
-    
-    const checkbox = div.querySelector('input');
-    checkbox.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            if (heatmapLayer) map.addLayer(heatmapLayer);
-        } else {
-            if (heatmapLayer) map.removeLayer(heatmapLayer);
-        }
-    });
-    
-    return div;
-};
-layerControl.addTo(map);
 
 // Initial update
 updateHeatmap();

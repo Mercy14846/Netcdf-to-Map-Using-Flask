@@ -367,42 +367,121 @@ html, body {
     font-size: 14px;
 }
 
+/* Center animation controls */
 .animation-control-panel {
+    position: fixed !important;
+    bottom: 20px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     background: rgba(255, 255, 255, 0.9);
-    padding: 10px;
-    border-radius: 4px;
-    box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-    margin: 10px;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000;
+    min-width: 300px;
 }
 
 .animation-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 15px;
 }
 
 #playPauseBtn {
-    background: #fff;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 5px 10px;
+    background: #1a73e8;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: background-color 0.2s;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
 }
 
 #playPauseBtn:hover {
-    background: #f0f0f0;
+    background: #1557b0;
+}
+
+#playPauseBtn i {
+    font-size: 16px;
 }
 
 #timeSlider {
     flex: 1;
-    min-width: 150px;
+    max-width: 300px;
+    height: 6px;
+    -webkit-appearance: none;
+    background: #ddd;
+    border-radius: 3px;
+    outline: none;
 }
 
-#currentDate {
-    font-size: 14px;
-    color: #333;
-    min-width: 100px;
+#timeSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #1a73e8;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#timeSlider::-webkit-slider-thumb:hover {
+    background: #1557b0;
+}
+
+#timeSlider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #1a73e8;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#timeSlider::-moz-range-thumb:hover {
+    background: #1557b0;
+}
+
+#currentTime {
+    font-size: 16px;
+    font-weight: 500;
+    color: #1a73e8;
+    min-width: 60px;
+    text-align: center;
+}
+
+/* Remove legend styles */
+.legend {
+    display: none;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .animation-control-panel {
+        min-width: 250px;
+        max-width: 90%;
+        padding: 10px;
+    }
+
+    .animation-controls {
+        gap: 10px;
+    }
+
+    #timeSlider {
+        max-width: 200px;
+    }
+
+    #playPauseBtn {
+        width: 36px;
+        height: 36px;
+    }
 }
 
 /* Temperature legend styles */
