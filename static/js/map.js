@@ -1,5 +1,5 @@
 // Constants
-const DEFAULT_CENTER = [20, 0];
+const AFRICA_CENTER = [0, 20];  // Centered on Africa
 const DEFAULT_ZOOM = 4;
 const TEMPERATURE_RANGE = {
     MIN: -40,
@@ -7,7 +7,7 @@ const TEMPERATURE_RANGE = {
 };
 
 // Initialize variables
-let currentYear = 2024;  // Fixed to 2024
+let currentYear = 2024;
 let heatmapLayer = null;
 let currentTooltip = null;
 
@@ -28,14 +28,14 @@ const temperatureGradient = {
 
 // Map configuration
 const mapConfig = {
-    center: DEFAULT_CENTER,
+    center: AFRICA_CENTER,
     zoom: DEFAULT_ZOOM,
     zoomControl: false,
     minZoom: 2,
     maxZoom: 8,
     attributionControl: false,
-    worldCopyJump: true,  // Better handling of world wrap
-    maxBounds: [[-90, -180], [90, 180]]  // Restrict map bounds
+    worldCopyJump: true,
+    maxBounds: [[-90, -180], [90, 180]]
 };
 
 // Initialize the map
@@ -43,21 +43,21 @@ const map = L.map('map', mapConfig);
 
 // Base layers
 const baseLayers = {
-    'Light': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    'Vector': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 9,
         attribution: '©OpenStreetMap, ©CartoDB',
-        subdomains: 'abcd',  // Use all available subdomains
-        detectRetina: true   // Support for retina displays
+        subdomains: 'abcd',
+        detectRetina: true
     }),
     'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 9,
         attribution: '©Esri',
-        detectRetina: true   // Support for retina displays
+        detectRetina: true
     })
 };
 
 // Add default base layer
-baseLayers['Light'].addTo(map);
+baseLayers['Vector'].addTo(map);
 
 // Initialize heatmap layer with optimized settings
 function initHeatLayer(data = []) {
@@ -75,7 +75,19 @@ function initHeatLayer(data = []) {
         maxOpacity: 0.8,
         scaleRadius: true,
         useLocalExtrema: false
-    }).addTo(map);
+    });
+    
+    // Add heatmap layer to map by default
+    heatmapLayer.addTo(map);
+    
+    // Update overlays object
+    overlays['Temperature Layer'] = heatmapLayer;
+    
+    // Refresh layer control
+    if (layerControl) {
+        layerControl.remove();
+        addLayerControl();
+    }
 }
 
 // Adaptive radius based on zoom level and device pixel ratio
@@ -207,15 +219,23 @@ L.control.zoom({
     position: 'bottomleft'
 }).addTo(map);
 
-// Layer control with base layers and overlay
+// Layer control setup
 const overlays = {
     'Temperature Layer': heatmapLayer
 };
 
-L.control.layers(baseLayers, overlays, {
-    position: 'topright',
-    collapsed: false
-}).addTo(map);
+let layerControl = null;
+
+function addLayerControl() {
+    layerControl = L.control.layers(baseLayers, overlays, {
+        position: 'topright',
+        collapsed: false,
+        sortLayers: true
+    }).addTo(map);
+}
+
+// Add initial layer control
+addLayerControl();
 
 // Attribution control
 L.control.attribution({
