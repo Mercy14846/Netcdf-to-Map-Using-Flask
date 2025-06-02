@@ -75,46 +75,6 @@ html, body {
     font-size: 14px;
 }
 
-/* Legend styles */
-.legend {
-    background: white;
-    padding: 10px;
-    border-radius: 5px;
-    box-shadow: 0 0 15px rgba(0,0,0,0.2);
-}
-
-.legend-title {
-    font-weight: 600;
-    margin-bottom: 12px;
-    font-size: 13px;
-    color: #333;
-    text-transform: uppercase;
-}
-
-.legend-container {
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    padding-bottom: 25px;
-}
-
-.gradient-bar {
-    width: 20px;
-    height: 200px;
-    margin-right: 10px;
-}
-
-.temp-labels {
-    position: relative;
-    height: 200px;
-}
-
-.temp-label {
-    position: absolute;
-    transform: translateX(-50%);
-    white-space: nowrap;
-}
-
 /* Info panel styles */
 .info-panel {
     background: white;
@@ -343,7 +303,12 @@ html, body {
     display: none;
     justify-content: center;
     align-items: center;
-    z-index: 1000;
+    z-index: 2000;
+}
+
+.loading-spinner {
+    color: #333;
+    font-size: 14px;
 }
 
 .error-message {
@@ -351,12 +316,13 @@ html, body {
     top: 20px;
     left: 50%;
     transform: translateX(-50%);
-    background: #ff6b6b;
+    background: rgba(255, 0, 0, 0.8);
     color: white;
-    padding: 10px 20px;
-    border-radius: 5px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    z-index: 2000;
+    font-size: 14px;
     display: none;
-    z-index: 1000;
 }
 
 .temp-tooltip {
@@ -511,31 +477,6 @@ html, body {
     text-align: right;
 }
 
-/* Temperature legend styles */
-.temperature-legend {
-    background: rgba(255, 255, 255, 0.9);
-    padding: 10px;
-    border-radius: 4px;
-    margin: 10px;
-}
-
-.legend-gradient {
-    height: 20px;
-    margin: 5px 0;
-    background: linear-gradient(to right,
-        #5e4fa2, #3288bd, #66c2a5, #abdda4,
-        #e6f598, #ffffbf, #fee08b, #fdae61,
-        #f46d43, #d53e4f, #9e0142
-    );
-}
-
-.legend-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 12px;
-    color: #333;
-}
-
 /* Time display styles */
 .time-display {
     position: absolute;
@@ -559,52 +500,6 @@ html, body {
 #currentTime {
     font-weight: bold;
     color: #1a73e8;
-}
-
-/* Update animation controls for hourly display */
-.animation-controls {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    padding: 5px;
-}
-
-#timeSlider {
-    flex: 1;
-    min-width: 200px;
-    height: 6px;
-    -webkit-appearance: none;
-    background: #ddd;
-    border-radius: 3px;
-    outline: none;
-}
-
-#timeSlider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    background: #1a73e8;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-#timeSlider::-webkit-slider-thumb:hover {
-    background: #1557b0;
-}
-
-#timeSlider::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: #1a73e8;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-#timeSlider::-moz-range-thumb:hover {
-    background: #1557b0;
 }
 
 /* Responsive styles for time display */
