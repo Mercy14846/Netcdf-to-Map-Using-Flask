@@ -216,15 +216,20 @@
     
     <!-- Initialize animation after map is ready -->
     <script>
-        // Wait for map to be ready before initializing animation
+        // Wait for both map and animation scripts to be loaded
         document.addEventListener('DOMContentLoaded', () => {
-            // Ensure map is initialized
-            if (typeof map !== 'undefined') {
-                console.log('Map is ready, initializing animation...');
-                initializeAnimation();
-            } else {
-                console.error('Map not initialized');
-            }
+            // Check if both map and animation functions are available
+            const checkDependencies = () => {
+                if (typeof map !== 'undefined' && typeof initializeAnimation === 'function') {
+                    console.log('All dependencies loaded, initializing animation...');
+                    initializeAnimation();
+                } else {
+                    console.log('Waiting for dependencies...');
+                    setTimeout(checkDependencies, 100);
+                }
+            };
+            
+            checkDependencies();
         });
     </script>
   </body>

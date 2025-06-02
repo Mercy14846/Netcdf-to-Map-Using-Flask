@@ -9,7 +9,6 @@ const ANIMATION_SPEED = 2000;  // 2 seconds per frame
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 3;
 const CACHE_SIZE = 50;
-const CHUNK_SIZE = 1000;
 
 // Debug logging
 const DEBUG = true;
