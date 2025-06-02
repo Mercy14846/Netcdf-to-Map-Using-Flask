@@ -271,8 +271,75 @@ def calculate_optimal_resolution(zoom):
     return base_resolution * min(2, zoom // 4)
 
 def render_tile(points, resolution):
-    # Implementation of render_tile function
-    pass
+    """Render tile image from points data"""
+    try:
+        # Create canvas with calculated resolution
+        canvas = ds.Canvas(
+            plot_width=resolution,
+            plot_height=resolution
+        )
+
+        # Convert points to DataFrame
+        df = pd.DataFrame(points, columns=['latitude', 'longitude', temp_var])
+        
+        # Create aggregation
+        agg = canvas.points(
+            df,
+            x='longitude',
+            y='latitude',
+            agg=ds.mean(temp_var)
+        )
+        
+        if agg is None:
+            return create_empty_tile()
+
+        # Calculate dynamic range for better visualization
+        min_temp = float(df[temp_var].min())
+        max_temp = float(df[temp_var].max())
+        temp_range = max_temp - min_temp
+        
+        if temp_range < 1.0:
+            mean_temp = (max_temp + min_temp) / 2
+            min_temp = mean_temp - 5
+            max_temp = mean_temp + 5
+        else:
+            padding = temp_range * 0.1
+            min_temp -= padding
+            max_temp += padding
+
+        # Shade the data
+        img = tf.shade(
+            agg,
+            cmap=create_colormap(),
+            span=[min_temp, max_temp],
+            how='linear'
+        )
+        
+        # Convert to RGBA with enhanced alpha channel
+        img_data = np.array(img.data)
+        alpha = np.where(np.isnan(agg.values), 0, 255)
+        normalized_values = (agg.values - min_temp) / (max_temp - min_temp)
+        alpha = np.where(
+            ~np.isnan(agg.values),
+            np.maximum(100, np.minimum(255, normalized_values * 255)),
+            0
+        ).astype(np.uint8)
+        
+        # Create final RGBA image
+        rgba = np.zeros((img_data.shape[0], img_data.shape[1], 4), dtype=np.uint8)
+        rgba[..., :3] = img_data[..., :3]
+        rgba[..., 3] = alpha
+        
+        # Resize to 256x256 if needed
+        pil_img = Image.fromarray(rgba, mode='RGBA')
+        if resolution != 256:
+            pil_img = pil_img.resize((256, 256), Image.Resampling.LANCZOS)
+            
+        return pil_img
+        
+    except Exception as e:
+        print(f"Error rendering tile: {str(e)}")
+        return create_empty_tile()
 
 @app.route("/")
 def index():
