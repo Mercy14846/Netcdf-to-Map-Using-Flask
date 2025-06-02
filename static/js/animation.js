@@ -6,9 +6,15 @@ let isPlaying = false;
 
 // Animation configuration
 const ANIMATION_SPEED = 2000;  // 2 seconds per frame
+const TRANSITION_DURATION = 500;  // 500ms transition duration
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 3;
 const CACHE_SIZE = 50;
+
+// Animation state
+let currentFrame = null;
+let nextFrame = null;
+let transitionProgress = 0;
 
 // Debug logging
 const DEBUG = true;
@@ -185,7 +191,7 @@ function initializeAnimationControls() {
     startAnimation();
 }
 
-// Update frame with optimized rendering
+// Update frame with optimized rendering and flow effect
 function updateFrame(frameIndex) {
     if (!animationData || !animationData.data[frameIndex]) return;
     
@@ -193,21 +199,39 @@ function updateFrame(frameIndex) {
     document.getElementById('currentTime').textContent = frameData.hour;
     document.getElementById('timeSlider').value = frameIndex;
     
-    // Update heatmap layer efficiently
-    const points = frameData.points.map(point => [
-        point.lat,
-        point.lon,
-        point.temperature
-    ]);
+    // Prepare current and next frame data
+    currentFrame = frameData.points;
+    const nextIndex = (frameIndex + 1) % animationData.data.length;
+    nextFrame = animationData.data[nextIndex].points;
     
-    // Create or update heatmap layer
-    if (!heatmapLayer) {
-        initHeatLayer(points);
+    // Interpolate between frames for smooth transition
+    const points = interpolateFrames(currentFrame, nextFrame, transitionProgress);
+    
+    // Update heatmap with flow effect
+    if (typeof window.updateHeatmapLayer === 'function') {
+        window.updateHeatmapLayer(points, TRANSITION_DURATION);
     } else {
-        requestAnimationFrame(() => {
+        // Fallback if updateHeatmapLayer is not available
+        if (!heatmapLayer) {
+            initHeatLayer(points);
+        } else {
             heatmapLayer.setLatLngs(points);
-        });
+        }
     }
+}
+
+// Interpolate between two frames for smooth transitions
+function interpolateFrames(frame1, frame2, progress) {
+    if (!frame1 || !frame2) return frame1 || frame2;
+    
+    return frame1.map((point, i) => {
+        const next = frame2[i] || point;
+        return [
+            point.lat + (next.lat - point.lat) * progress,
+            point.lon + (next.lon - point.lon) * progress,
+            point.temperature + (next.temperature - point.temperature) * progress
+        ];
+    });
 }
 
 // Toggle animation playback
@@ -225,24 +249,37 @@ function toggleAnimation() {
     }
 }
 
-// Start animation with performance optimization
+// Start animation with flow effect
 function startAnimation() {
     if (!isPlaying || !animationData) return;
     
     stopAnimation(); // Clear any existing interval
     
-    animationInterval = setInterval(() => {
-        currentFrameIndex = (currentFrameIndex + 1) % animationData.data.length;
-        requestAnimationFrame(() => {
-            updateFrame(currentFrameIndex);
-        });
-    }, ANIMATION_SPEED);
+    let lastTime = performance.now();
+    const frameDuration = ANIMATION_SPEED;
+    
+    function animate(currentTime) {
+        if (!isPlaying) return;
+        
+        const deltaTime = currentTime - lastTime;
+        transitionProgress = (deltaTime % frameDuration) / frameDuration;
+        
+        if (deltaTime >= frameDuration) {
+            currentFrameIndex = (currentFrameIndex + 1) % animationData.data.length;
+            lastTime = currentTime;
+        }
+        
+        updateFrame(currentFrameIndex);
+        animationInterval = requestAnimationFrame(animate);
+    }
+    
+    animationInterval = requestAnimationFrame(animate);
 }
 
 // Stop animation
 function stopAnimation() {
     if (animationInterval) {
-        clearInterval(animationInterval);
+        cancelAnimationFrame(animationInterval);
         animationInterval = null;
     }
 }
