@@ -57,7 +57,7 @@ const baseLayers = {
         attribution: '©OpenStreetMap, ©CartoDB',
         subdomains: 'abcd',
         detectRetina: true
-    }),
+    }).addTo(map),  // Add default layer immediately
     'Satellite': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 9,
         attribution: '©Esri',
@@ -65,8 +65,8 @@ const baseLayers = {
     })
 };
 
-// Add default base layer
-baseLayers['Vector'].addTo(map);
+// Initialize overlays object
+const overlays = {};
 
 // Initialize heatmap layer with optimized settings
 function initHeatLayer(data = []) {
@@ -95,8 +95,8 @@ function initHeatLayer(data = []) {
     // Refresh layer control
     if (layerControl) {
         layerControl.remove();
-        addLayerControl();
     }
+    addLayerControl();
 }
 
 // Adaptive radius based on zoom level and device pixel ratio
@@ -288,10 +288,6 @@ L.control.zoom({
 }).addTo(map);
 
 // Layer control setup
-const overlays = {
-    'Temperature Layer': heatmapLayer
-};
-
 let layerControl = null;
 
 function addLayerControl() {
@@ -300,25 +296,28 @@ function addLayerControl() {
         layerControl.remove();
     }
 
-    // Create new layer control
-    layerControl = L.control.layers(baseLayers, overlays, {
-        position: 'topright',
-        collapsed: false,
-        sortLayers: true,
-        hideSingleBase: false
-    }).addTo(map);
+    // Only create layer control if we have layers to show
+    if (Object.keys(overlays).length > 0 || Object.keys(baseLayers).length > 0) {
+        // Create new layer control
+        layerControl = L.control.layers(baseLayers, overlays, {
+            position: 'topright',
+            collapsed: false,
+            sortLayers: true,
+            hideSingleBase: false
+        }).addTo(map);
 
-    // Force the layer control to be visible
-    setTimeout(() => {
-        const layerControlElement = document.querySelector('.leaflet-control-layers');
-        if (layerControlElement) {
-            layerControlElement.style.display = 'block';
-            layerControlElement.classList.add('leaflet-control-layers-expanded');
-        }
-    }, 100);
+        // Force the layer control to be visible
+        setTimeout(() => {
+            const layerControlElement = document.querySelector('.leaflet-control-layers');
+            if (layerControlElement) {
+                layerControlElement.style.display = 'block';
+                layerControlElement.classList.add('leaflet-control-layers-expanded');
+            }
+        }, 100);
+    }
 }
 
-// Add initial layer control
+// Initial layer control setup (only for base layers)
 addLayerControl();
 
 // Attribution control

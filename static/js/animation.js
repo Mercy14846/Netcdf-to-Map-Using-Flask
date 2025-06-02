@@ -3,7 +3,6 @@ let animationData = null;
 let currentFrameIndex = 0;
 let animationInterval = null;
 let isPlaying = false;
-let dataCache = new Map();
 
 // Animation configuration
 const ANIMATION_SPEED = 2000;  // 2 seconds per frame
