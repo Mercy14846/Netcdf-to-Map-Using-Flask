@@ -156,26 +156,29 @@ function manageCache() {
 function initializeAnimationControls() {
     const slider = document.getElementById('timeSlider');
     slider.max = animationData.timestamps.length - 1;
-    slider.value = 0;
-    updateFrame(0);
+    slider.value = currentFrameIndex;
+    updateFrame(currentFrameIndex);
 }
 
 // Update frame with optimized rendering
 function updateFrame(frameIndex) {
-    if (!animationData) return;
+    if (!animationData || !animationData.data[frameIndex]) return;
     
     const frameData = animationData.data[frameIndex];
     document.getElementById('currentTime').textContent = frameData.hour;
     document.getElementById('timeSlider').value = frameIndex;
     
     // Update heatmap layer efficiently
-    if (heatmapLayer) {
-        const points = frameData.points.map(point => [
-            point.lat,
-            point.lon,
-            point.temperature
-        ]);
-        
+    const points = frameData.points.map(point => [
+        point.lat,
+        point.lon,
+        point.temperature
+    ]);
+    
+    // Create or update heatmap layer
+    if (!heatmapLayer) {
+        initHeatLayer(points);
+    } else {
         requestAnimationFrame(() => {
             heatmapLayer.setLatLngs(points);
         });
@@ -201,8 +204,10 @@ function toggleAnimation() {
 function startAnimation() {
     if (!isPlaying || !animationData) return;
     
+    stopAnimation(); // Clear any existing interval
+    
     animationInterval = setInterval(() => {
-        currentFrameIndex = (currentFrameIndex + 1) % animationData.timestamps.length;
+        currentFrameIndex = (currentFrameIndex + 1) % animationData.data.length;
         requestAnimationFrame(() => {
             updateFrame(currentFrameIndex);
         });
@@ -225,6 +230,8 @@ function handleSliderChange(e) {
 
 // Normalize temperature value
 function normalizeTemperature(temp) {
+    if (!animationData || !animationData.temperature_range) return 0;
+    
     const min = animationData.temperature_range.min;
     const max = animationData.temperature_range.max;
     return Math.max(0, Math.min(1, (temp - min) / (max - min)));

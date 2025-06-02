@@ -701,8 +701,8 @@ def get_animation_data():
         animation_data = {
             'timestamps': processed_data['hours'],
             'temperature_range': {
-                'min': min_val,
-                'max': max_val,
+                'min': float(min_val),
+                'max': float(max_val),
                 'classes': processed_data['temp_classes']
             },
             'colors': processed_data['colormap'].colors,
@@ -717,18 +717,24 @@ def get_animation_data():
             
             # Reduce data precision and filter out unnecessary points
             for _, row in hour_data.iterrows():
-                # Round coordinates to 4 decimal places and temperature to 1 decimal
-                point = {
-                    'lat': round(float(row['latitude']), 4),
-                    'lon': round(float(row['longitude']), 4),
-                    'temperature': round(float(row[temp_var]), 1)
-                }
-                points.append(point)
+                if not np.isnan(row[temp_var]):  # Skip NaN values
+                    # Round coordinates to 4 decimal places and temperature to 1 decimal
+                    point = {
+                        'lat': round(float(row['latitude']), 4),
+                        'lon': round(float(row['longitude']), 4),
+                        'temperature': round(float(row[temp_var]), 1)
+                    }
+                    points.append(point)
             
-            animation_data['data'].append({
-                'hour': hour,
-                'points': points
-            })
+            if points:  # Only add frame if it has valid points
+                animation_data['data'].append({
+                    'hour': hour,
+                    'points': points
+                })
+        
+        # Validate data before sending
+        if not animation_data['data']:
+            raise ValueError("No valid animation data generated")
         
         # Set response headers for caching
         response = jsonify(animation_data)
@@ -782,9 +788,9 @@ def process_netcdf_data():
         
         return {
             'temp_df': temp_2m_df,
+            'hours': [h.strftime('%H:%M') for h in hours],
             'temp_classes': temp_classes,
-            'colormap': temp_colormap,
-            'hours': hours.strftime('%H:%M').tolist()
+            'colormap': temp_colormap
         }
         
     except Exception as e:
