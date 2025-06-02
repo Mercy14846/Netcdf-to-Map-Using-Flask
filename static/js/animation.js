@@ -2,10 +2,12 @@
 let animationData = null;
 let currentFrameIndex = 0;
 let animationInterval = null;
-let isPlaying = true;
+let isPlaying = false;
 
 // Animation speed in milliseconds (2 seconds per hour)
 const ANIMATION_SPEED = 2000;
+const RETRY_DELAY = 1000;
+const MAX_RETRIES = 3;
 
 // Initialize animation controls
 function initializeAnimation() {
@@ -17,7 +19,7 @@ function initializeAnimation() {
         div.innerHTML = `
             <div class="animation-controls">
                 <button id="playPauseBtn" title="Play/Pause">
-                    <i class="fas fa-play"></i>
+                    <i class="fas fa-pause"></i>
                 </button>
                 <input type="range" id="timeSlider" min="0" max="23" value="0">
                 <span id="currentTime"></span>
@@ -36,28 +38,59 @@ function initializeAnimation() {
     loadAnimationData();
 }
 
-// Load temperature data for animation
-async function loadAnimationData() {
+// Load temperature data for animation with retry mechanism
+async function loadAnimationData(retryCount = 0) {
     try {
         showLoading();
-        const response = await fetch('/api/animation-data');
+        const response = await fetch('/api/animation-data', {
+            headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+            }
+        });
+        
         if (!response.ok) throw new Error('Failed to load animation data');
         
         animationData = await response.json();
+        
+        if (!animationData || !animationData.data || animationData.data.length === 0) {
+            throw new Error('Invalid data format received');
+        }
         
         // Initialize slider
         const slider = document.getElementById('timeSlider');
         slider.max = animationData.timestamps.length - 1;
         slider.value = 0;
         
-        // Show initial frame
+        // Show initial frame and start animation
         updateFrame(0);
+        startAnimation();
         hideLoading();
         
     } catch (error) {
         console.error('Error loading animation data:', error);
-        showError('Failed to load temperature animation data');
-        hideLoading();
+        
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying data load (${retryCount + 1}/${MAX_RETRIES})...`);
+            setTimeout(() => {
+                loadAnimationData(retryCount + 1);
+            }, RETRY_DELAY * (retryCount + 1));
+        } else {
+            showError('Failed to load temperature animation data. Please refresh the page.');
+            hideLoading();
+        }
+    }
+}
+
+// Start animation automatically
+function startAnimation() {
+    if (!isPlaying) {
+        isPlaying = true;
+        document.getElementById('playPauseBtn').innerHTML = '<i class="fas fa-pause"></i>';
+        animationInterval = setInterval(() => {
+            currentFrameIndex = (currentFrameIndex + 1) % animationData.timestamps.length;
+            updateFrame(currentFrameIndex);
+        }, ANIMATION_SPEED);
     }
 }
 
@@ -107,6 +140,11 @@ function toggleAnimation() {
 function handleSliderChange(event) {
     currentFrameIndex = parseInt(event.target.value);
     updateFrame(currentFrameIndex);
+    
+    // Pause animation when manually changing time
+    if (isPlaying) {
+        toggleAnimation();
+    }
 }
 
 // Initialize animation when the map is ready
