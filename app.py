@@ -113,9 +113,9 @@ def load_data():
         lon_array = data.longitude.persist()
         lat_array = data.latitude.persist()
         
-        # Calculate min/max values efficiently
-        with executor.submit(calculate_temp_range) as future:
-            min_val, max_val = future.result()
+        # Calculate min/max values efficiently using the executor
+        future = executor.submit(calculate_temp_range)
+        min_val, max_val = future.result()
             
         print(f"DEBUG: Temperature range: {min_val} to {max_val}")
         
