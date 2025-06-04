@@ -3,6 +3,7 @@ let animationData = null;
 let currentFrameIndex = 0;
 let animationInterval = null;
 let isPlaying = false;
+let lastFrameTime = 0;
 
 // Animation configuration
 const ANIMATION_SPEED = 2000;  // 2 seconds per frame
@@ -10,11 +11,13 @@ const TRANSITION_DURATION = 500;  // 500ms transition duration
 const RETRY_DELAY = 1000;
 const MAX_RETRIES = 3;
 const CACHE_SIZE = 50;
+const MIN_FRAME_TIME = 16;  // ~60fps cap
 
 // Animation state
 let currentFrame = null;
 let nextFrame = null;
 let transitionProgress = 0;
+let dataCache = new Map();
 
 // Debug logging
 const DEBUG = true;
@@ -24,40 +27,71 @@ function log(...args) {
     }
 }
 
-// Initialize animation controls
-function initializeAnimation() {
-    log('Initializing animation controls...');
-    
-    const controlPanel = L.control({ position: 'bottomright' });
-    
-    controlPanel.onAdd = function() {
-        log('Creating control panel...');
-        const div = L.DomUtil.create('div', 'animation-control-panel');
-        div.innerHTML = `
-            <div class="animation-controls">
-                <button id="playPauseBtn" title="Play/Pause">
-                    <i class="fas fa-play"></i>
-                </button>
-                <input type="range" id="timeSlider" min="0" max="23" value="0">
-                <span id="currentTime">00:00</span>
-            </div>
-        `;
-        return div;
-    };
-    
-    controlPanel.addTo(map);
-    log('Control panel added to map');
-    
-    // Add event listeners
-    document.getElementById('playPauseBtn').addEventListener('click', toggleAnimation);
-    document.getElementById('timeSlider').addEventListener('input', handleSliderChange);
-    
-    // Load initial data
-    log('Loading initial animation data...');
-    loadAnimationData();
+// Error handling
+function handleError(error, context) {
+    console.error(`[Animation Error] ${context}:`, error);
+    showError(`Animation error: ${context}. Please refresh the page.`);
 }
 
-// Load animation data with optimizations
+// Cache management
+function manageCache() {
+    try {
+        if (dataCache.size > CACHE_SIZE) {
+            const keysIterator = dataCache.keys();
+            const oldestKey = keysIterator.next().value;
+            dataCache.delete(oldestKey);
+            log('Cache cleaned, removed:', oldestKey);
+        }
+    } catch (error) {
+        handleError(error, 'Cache management');
+    }
+}
+
+// Initialize animation controls
+function initializeAnimation() {
+    try {
+        log('Initializing animation controls...');
+        
+        const controlPanel = L.control({ position: 'bottomright' });
+        
+        controlPanel.onAdd = function() {
+            log('Creating control panel...');
+            const div = L.DomUtil.create('div', 'animation-control-panel');
+            div.innerHTML = `
+                <div class="animation-controls">
+                    <button id="playPauseBtn" title="Play/Pause">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <input type="range" id="timeSlider" min="0" max="23" value="0">
+                    <span id="currentTime">00:00</span>
+                </div>
+            `;
+            return div;
+        };
+        
+        controlPanel.addTo(map);
+        log('Control panel added to map');
+        
+        // Add event listeners with error handling
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const timeSlider = document.getElementById('timeSlider');
+        
+        if (!playPauseBtn || !timeSlider) {
+            throw new Error('Required control elements not found');
+        }
+        
+        playPauseBtn.addEventListener('click', toggleAnimation);
+        timeSlider.addEventListener('input', handleSliderChange);
+        
+        // Load initial data
+        log('Loading initial animation data...');
+        loadAnimationData();
+    } catch (error) {
+        handleError(error, 'Initialization');
+    }
+}
+
+// Load animation data with optimizations and error handling
 async function loadAnimationData(retryCount = 0) {
     try {
         log('Loading animation data, attempt:', retryCount + 1);
@@ -81,7 +115,9 @@ async function loadAnimationData(retryCount = 0) {
             }
         });
         
-        if (!response.ok) throw new Error('Failed to load animation data');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const rawData = await response.json();
         log('Received raw data:', rawData);
@@ -114,7 +150,7 @@ async function loadAnimationData(retryCount = 0) {
                 loadAnimationData(retryCount + 1);
             }, RETRY_DELAY * (retryCount + 1));
         } else {
-            showError('Failed to load temperature animation data. Please refresh the page.');
+            handleError(error, 'Data loading failed after max retries');
             hideLoading();
         }
     }
@@ -167,14 +203,6 @@ function chunkArray(array, size) {
         chunks.push(array.slice(i, i + size));
     }
     return chunks;
-}
-
-// Manage cache size
-function manageCache() {
-    if (dataCache.size > CACHE_SIZE) {
-        const oldestKey = dataCache.keys().next().value;
-        dataCache.delete(oldestKey);
-    }
 }
 
 // Initialize animation controls
@@ -249,34 +277,47 @@ function toggleAnimation() {
     }
 }
 
-// Start animation with flow effect
+// Start animation with improved timing
 function startAnimation() {
     if (!isPlaying || !animationData) return;
     
-    stopAnimation(); // Clear any existing interval
+    stopAnimation(); // Clear any existing animation
     
-    let lastTime = performance.now();
-    const frameDuration = ANIMATION_SPEED;
+    lastFrameTime = performance.now();
     
     function animate(currentTime) {
         if (!isPlaying) return;
         
-        const deltaTime = currentTime - lastTime;
-        transitionProgress = (deltaTime % frameDuration) / frameDuration;
+        const deltaTime = currentTime - lastFrameTime;
         
-        if (deltaTime >= frameDuration) {
-            currentFrameIndex = (currentFrameIndex + 1) % animationData.data.length;
-            lastTime = currentTime;
+        // Ensure minimum frame time for performance
+        if (deltaTime < MIN_FRAME_TIME) {
+            animationInterval = requestAnimationFrame(animate);
+            return;
         }
         
-        updateFrame(currentFrameIndex);
+        transitionProgress = (deltaTime % ANIMATION_SPEED) / ANIMATION_SPEED;
+        
+        if (deltaTime >= ANIMATION_SPEED) {
+            currentFrameIndex = (currentFrameIndex + 1) % animationData.data.length;
+            lastFrameTime = currentTime;
+        }
+        
+        try {
+            updateFrame(currentFrameIndex);
+        } catch (error) {
+            handleError(error, 'Frame update');
+            stopAnimation();
+            return;
+        }
+        
         animationInterval = requestAnimationFrame(animate);
     }
     
     animationInterval = requestAnimationFrame(animate);
 }
 
-// Stop animation
+// Stop animation with cleanup
 function stopAnimation() {
     if (animationInterval) {
         cancelAnimationFrame(animationInterval);
@@ -284,10 +325,18 @@ function stopAnimation() {
     }
 }
 
-// Handle slider changes
+// Handle slider changes with validation
 function handleSliderChange(e) {
-    currentFrameIndex = parseInt(e.target.value);
-    updateFrame(currentFrameIndex);
+    try {
+        const newIndex = parseInt(e.target.value);
+        if (isNaN(newIndex) || newIndex < 0 || !animationData || newIndex >= animationData.data.length) {
+            throw new Error('Invalid slider value');
+        }
+        currentFrameIndex = newIndex;
+        updateFrame(currentFrameIndex);
+    } catch (error) {
+        handleError(error, 'Slider change');
+    }
 }
 
 // Normalize temperature value
