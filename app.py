@@ -25,18 +25,30 @@ import dask.array as da
 from concurrent.futures import ThreadPoolExecutor
 import gc
 import psutil
+from dataclasses import dataclass
+from datetime import datetime
 
 # Increase recursion limit if needed
 sys.setrecursionlimit(10000)
 
-app = Flask(__name__)
+# Configuration
+@dataclass
+class Config:
+    CACHE_TYPE: str = 'simple'
+    CACHE_DEFAULT_TIMEOUT: int = 7200  # 2 hours
+    CACHE_THRESHOLD: int = 5000  # Store more items in cache
+    MEMORY_THRESHOLD: float = 0.85  # 85% memory usage threshold
+    MAX_WORKERS: int = 4
+    CHUNK_SIZE: int = 200
+    DEBUG: bool = True
 
-# Configure Flask-Caching with increased timeout and larger threshold
-cache = Cache(app, config={
-    'CACHE_TYPE': 'simple',
-    'CACHE_DEFAULT_TIMEOUT': 7200,  # 2 hours
-    'CACHE_THRESHOLD': 5000  # Store more items in cache
-})
+config = Config()
+
+app = Flask(__name__)
+app.config.from_object(config)
+
+# Configure Flask-Caching
+cache = Cache(app)
 
 # Global variables for data
 data = None
@@ -50,92 +62,101 @@ data_array = None
 time_data_var = None
 
 # Configure thread pool
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=config.MAX_WORKERS)
 
 # Memory monitoring
 memory_lock = threading.Lock()
-MEMORY_THRESHOLD = 0.85  # 85% memory usage threshold
 
-def check_memory_usage():
-    memory = psutil.virtual_memory()
-    return memory.percent / 100.0
+class MemoryManager:
+    @staticmethod
+    def check_memory_usage() -> float:
+        memory = psutil.virtual_memory()
+        return memory.percent / 100.0
 
-def clear_memory_if_needed():
-    with memory_lock:
-        if check_memory_usage() > MEMORY_THRESHOLD:
-            gc.collect()
-            return True
-    return False
+    @staticmethod
+    def clear_memory_if_needed() -> bool:
+        with memory_lock:
+            if MemoryManager.check_memory_usage() > config.MEMORY_THRESHOLD:
+                gc.collect()
+                return True
+        return False
 
-def load_data():
-    global data, time_data, temp_var, min_val, max_val, lon_array, lat_array, data_array, time_data_var
-    
-    try:
-        print("\nDEBUG: Starting data loading process...")
-        
-        # Optimize chunk sizes based on available memory
+    @staticmethod
+    def get_optimal_chunk_size() -> int:
         available_memory = psutil.virtual_memory().available
-        chunk_size = max(50, min(200, int(available_memory / (1024 * 1024 * 1024))))  # Dynamic chunk size
-        
-        # Load the datasets with optimized chunking
-        try:
-            data = xr.open_dataset("static/data/temp_2m.nc", 
-                                 chunks={'latitude': chunk_size, 'longitude': chunk_size},
-                                 engine='netcdf4',
-                                 cache=True)
-            print(f"DEBUG: Successfully loaded temp_2m.nc with chunk size {chunk_size}")
-        except Exception as e:
-            print(f"ERROR loading temp_2m.nc: {str(e)}")
-            raise
-            
-        try:
-            time_data = xr.open_dataset("static/data/temperature.nc",
-                                      chunks={'time': chunk_size},
-                                      engine='netcdf4',
-                                      cache=True)
-            print("DEBUG: Successfully loaded temperature.nc")
-        except Exception as e:
-            print(f"ERROR loading temperature.nc: {str(e)}")
-            raise
-        
-        # Pre-compute commonly used values
-        temp_vars = ['tmin', 'temp', 'temperature', 't2m']
-        temp_var = next((var for var in data.data_vars if var in temp_vars), None)
-        
-        if temp_var is None:
-            if len(data.data_vars) > 0:
-                temp_var = list(data.data_vars)[0]
-            else:
-                raise ValueError("No variables found in temp_2m.nc")
-        
-        # Pre-compute arrays with dask for parallel processing
-        data_array = data[temp_var].persist()
-        lon_array = data.longitude.persist()
-        lat_array = data.latitude.persist()
-        
-        # Calculate min/max values efficiently using the executor
-        future = executor.submit(calculate_temp_range)
-        min_val, max_val = future.result()
-            
-        print(f"DEBUG: Temperature range: {min_val} to {max_val}")
-        
-    except Exception as e:
-        print(f"Error loading data: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise
+        return max(50, min(200, int(available_memory / (1024 * 1024 * 1024))))
 
-@lru_cache(maxsize=1000)
-def calculate_temp_range():
-    """Calculate temperature range with caching"""
-    sample_data = data_array.data.compute_chunk_sizes()
-    min_val = float(da.min(sample_data).compute())
-    max_val = float(da.max(sample_data).compute())
-    return min_val, max_val
+class DataManager:
+    _instance = None
+    data: Optional[xr.Dataset] = None
+    time_data: Optional[xr.Dataset] = None
+    temp_var: Optional[str] = None
+    min_val: Optional[float] = None
+    max_val: Optional[float] = None
+    lon_array: Optional[np.ndarray] = None
+    lat_array: Optional[np.ndarray] = None
+    data_array: Optional[xr.DataArray] = None
+    time_data_var: Optional[str] = None
 
-# Initialize data at startup
-print("\nDEBUG: Starting application, loading initial data...")
-load_data()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DataManager, cls).__new__(cls)
+        return cls._instance
+
+    def load_data(self):
+        try:
+            print("\nDEBUG: Starting data loading process...")
+            chunk_size = MemoryManager.get_optimal_chunk_size()
+            
+            self.data = xr.open_dataset(
+                "static/data/temp_2m.nc",
+                chunks={'latitude': chunk_size, 'longitude': chunk_size},
+                engine='netcdf4',
+                cache=True
+            )
+            
+            self.time_data = xr.open_dataset(
+                "static/data/temperature.nc",
+                chunks={'time': chunk_size},
+                engine='netcdf4',
+                cache=True
+            )
+            
+            # Find temperature variable
+            temp_vars = ['tmin', 'temp', 'temperature', 't2m']
+            self.temp_var = next((var for var in self.data.data_vars if var in temp_vars), None)
+            
+            if self.temp_var is None:
+                if len(self.data.data_vars) > 0:
+                    self.temp_var = list(self.data.data_vars)[0]
+                else:
+                    raise ValueError("No variables found in temp_2m.nc")
+            
+            # Pre-compute arrays
+            self.data_array = self.data[self.temp_var].persist()
+            self.lon_array = self.data.longitude.persist()
+            self.lat_array = self.data.latitude.persist()
+            
+            # Calculate temperature range
+            self.calculate_temp_range()
+            
+        except Exception as e:
+            print(f"Error loading data: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
+
+    @lru_cache(maxsize=1000)
+    def calculate_temp_range(self) -> Tuple[float, float]:
+        """Calculate temperature range with caching"""
+        sample_data = self.data_array.data.compute_chunk_sizes()
+        self.min_val = float(da.min(sample_data).compute())
+        self.max_val = float(da.max(sample_data).compute())
+        return self.min_val, self.max_val
+
+# Initialize data manager
+data_manager = DataManager()
+data_manager.load_data()
 
 # https://github.com/ScottSyms/tileshade/
 def tile2mercator(longitudetile, latitudetile, zoom):
@@ -199,7 +220,7 @@ def generateatile(zoom, longitude, latitude):
 
     try:
         # Clear memory if needed
-        clear_memory_if_needed()
+        MemoryManager.clear_memory_if_needed()
         
         # Convert coordinates and calculate bounds
         xleft, yleft = tile2mercator(int(longitude), int(latitude), int(zoom))
@@ -380,38 +401,32 @@ def create_error_tile(error_message):
 
 @app.route("/tiles/<int:zoom>/<int:longitude>/<int:latitude>.png")
 @cache.memoize(timeout=7200)
-def tile(longitude, latitude, zoom):
-    try:
-        # Validate zoom level
-        if zoom < 0 or zoom > 20:
-            return send_file(create_error_tile("Invalid zoom level").save(io.BytesIO(), format='PNG'), mimetype='image/png')
-        
-        # Check if coordinates are within valid range
-        if longitude < 0 or longitude >= 2**zoom or latitude < 0 or latitude >= 2**zoom:
-            return send_file(create_error_tile("Invalid tile coordinates").save(io.BytesIO(), format='PNG'), mimetype='image/png')
-        
-        results = generateatile(zoom, longitude, latitude)
-        
-        # Convert results to bytes
-        results_bytes = io.BytesIO()
-        if isinstance(results, Image.Image):
-            try:
-                results.save(results_bytes, format='PNG')
-            except Exception as e:
-                print(f"Error saving tile image: {str(e)}")
-                return send_file(create_error_tile("Error saving tile").save(io.BytesIO(), format='PNG'), mimetype='image/png')
-        else:
-            print("Invalid tile result type")
-            return send_file(create_error_tile("Invalid tile data").save(io.BytesIO(), format='PNG'), mimetype='image/png')
-        
-        results_bytes.seek(0)
-        return send_file(results_bytes, mimetype='image/png')
-        
-    except Exception as e:
-        print(f"Error generating tile: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return send_file(create_error_tile("Tile generation error").save(io.BytesIO(), format='PNG'), mimetype='image/png')
+def tile(longitude: int, latitude: int, zoom: int):
+    # Validate input parameters
+    if not (0 <= zoom <= 20):
+        return send_file(create_error_tile("Invalid zoom level"), mimetype='image/png')
+    
+    if not (0 <= longitude < 2**zoom and 0 <= latitude < 2**zoom):
+        return send_file(create_error_tile("Invalid tile coordinates"), mimetype='image/png')
+    
+    # Clear memory if needed
+    MemoryManager.clear_memory_if_needed()
+    
+    # Generate tile
+    results = generateatile(zoom, longitude, latitude)
+    
+    # Convert to bytes
+    results_bytes = io.BytesIO()
+    if isinstance(results, Image.Image):
+        try:
+            results.save(results_bytes, format='PNG', optimize=True)
+            results_bytes.seek(0)
+            return send_file(results_bytes, mimetype='image/png')
+        except Exception as e:
+            print(f"Error saving tile image: {str(e)}")
+            return send_file(create_error_tile("Error saving tile"), mimetype='image/png')
+    
+    return send_file(create_error_tile("Invalid tile data"), mimetype='image/png')
 
 @app.route('/api/heatmap-data', methods=['POST'])
 @cache.memoize(timeout=300)  # 5 minute cache
@@ -800,11 +815,11 @@ def process_netcdf_data():
         raise
 
 if __name__ == '__main__':
-    # Run the app on all network interfaces (0.0.0.0)
-    # This makes it accessible from other devices on the network
-    # Default port is 5000, but you can change it if needed
+    # Run the app with optimized settings
     app.run(
-        host='0.0.0.0',  # Listen on all network interfaces
-        port=8080,       # You can change this port if needed
-        debug=True       # Keep debug mode for development
+        host='0.0.0.0',
+        port=8080,
+        debug=config.DEBUG,
+        threaded=True,
+        use_reloader=False  # Disable reloader in production
     )
